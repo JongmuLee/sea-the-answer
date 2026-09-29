@@ -1,0 +1,8 @@
+.backup/
+.replica/
+.verification/
+node_modules/
+data/
+.env
+.env.*
+!.env.example
