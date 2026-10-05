@@ -1,72 +1,43 @@
 param(
-    [ValidateRange(1, 65535)][int]$Port = 5173,
-    [ValidateSet('serve', 'test', 'ingest', 'check')][string]$Task = 'serve',
+    [ValidateRange(1,65535)][int]$Port = 5173,
+    [ValidateSet('serve','dev','build','test','ingest','check')][string]$Task = 'serve',
     [string]$Document = 'knowledge/seed.json',
     [switch]$Lan,
     [string]$NodePath
 )
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 Set-Location -LiteralPath $PSScriptRoot
-# Probe native executables without PowerShell treating stderr warnings as fatal errors.
-function Test-NodeRuntime([string]$Executable) {
-    if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { return $false }
-    $probe = New-Object System.Diagnostics.Process
-    $probe.StartInfo.FileName = $Executable
-    $probe.StartInfo.Arguments = '"' + (Join-Path $PSScriptRoot 'scripts\check-runtime.cjs') + '"'
-    $probe.StartInfo.UseShellExecute = $false
-    $probe.StartInfo.CreateNoWindow = $true
-    $probe.StartInfo.RedirectStandardOutput = $true
-    $probe.StartInfo.RedirectStandardError = $true
-    $probe.StartInfo.EnvironmentVariables['ELECTRON_RUN_AS_NODE'] = '1'
-    try {
-        [void]$probe.Start()
-        $probe.StandardOutput.ReadToEnd() | Out-Null
-        $probeError = $probe.StandardError.ReadToEnd()
-        $probe.WaitForExit()
-        if ($probe.ExitCode -ne 0) {
-            Write-Host "Skipping incompatible runtime: $Executable"
-            if ($probeError) { Write-Host $probeError.Trim() }
-        }
-        return $probe.ExitCode -eq 0
-    } catch { return $false }
-    finally { $probe.Dispose() }
-}
-
-$taskArguments = @(switch ($Task) {
-    'test' { @('--test') + @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests') -Filter '*.test.mjs' | ForEach-Object FullName) }
-    'ingest' { @('scripts/ingest.mjs', $Document) }
-    'check' { @('-p', 'process.version') }
-    default { @('server.mjs') }
-})
-if ($Task -eq 'serve') {
-    if ($PSBoundParameters.ContainsKey('Port')) { $taskArguments += @('--port', [string]$Port) }
-    if ($Lan) { $taskArguments += '--lan' }
-}
 $nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
-$candidates = @()
-if ($NodePath) { $candidates += $NodePath }
-if ($env:HAEDAP_NODE) { $candidates += $env:HAEDAP_NODE }
-if ($nodeCommand) { $candidates += $nodeCommand.Source }
-$candidates += @(
-    (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
-    (Join-Path $env:LOCALAPPDATA 'Programs\Microsoft VS Code\Code.exe'),
-    (Join-Path $env:ProgramFiles 'Microsoft VS Code\Code.exe')
-)
-$previousElectronMode = $env:ELECTRON_RUN_AS_NODE
-foreach ($candidate in ($candidates | Select-Object -Unique)) {
-    if (Test-NodeRuntime $candidate) {
-        Write-Host "Runtime: $candidate"
-        if ($Task -eq 'check') { Write-Host 'SQLite + FTS5 ready' }
-        $env:ELECTRON_RUN_AS_NODE = '1'
-        # Piping also waits for Windows GUI executables such as Code.exe.
-        $ErrorActionPreference = 'Continue'
-        try {
-            & $candidate @taskArguments | Out-Host
-            $taskExitCode = $LASTEXITCODE
-        } finally { $env:ELECTRON_RUN_AS_NODE = $previousElectronMode }
-        exit $taskExitCode
-    }
+if (-not $NodePath -and $env:HAEDAP_NODE) { $NodePath = $env:HAEDAP_NODE }
+if (-not $NodePath -and $nodeCommand) { $NodePath = $nodeCommand.Source }
+if (-not $NodePath) { Write-Host 'Install official Node.js 24 LTS, reopen the terminal, and run start.cmd.'; exit 1 }
+$env:PATH = (Split-Path -Parent $NodePath) + ';' + $env:PATH
+$env:NEXT_TELEMETRY_DISABLED = '1'
+& $NodePath 'scripts/check-runtime.cjs'
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$major = [int]((& $NodePath -p 'process.versions.node.split(String.fromCharCode(46))[0]') | Select-Object -Last 1)
+if ($major -lt 24) { Write-Host 'Node.js 24 or newer is required.'; exit 1 }
+if ($Task -eq 'check') { exit 0 }
+$npmCommand = Get-Command npm.cmd -CommandType Application -ErrorAction SilentlyContinue
+if (-not $npmCommand) { Write-Host 'npm.cmd was not found. Install Node.js with npm.'; exit 1 }
+function Invoke-Npm([string[]]$NpmArgs) {
+    & $npmCommand.Source @NpmArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
-Write-Host 'No compatible runtime found. Install official Node.js 24 LTS (with SQLite FTS5), then reopen the terminal and run start.cmd.'
-Write-Host 'Download: https://nodejs.org/en/download'
-exit 1
+if (-not (Test-Path -LiteralPath 'node_modules/next/package.json')) {
+    Write-Host 'Installing dependencies (internet is required for the first installation)...'
+    Invoke-Npm @('ci')
+}
+if ($Task -eq 'build') { Invoke-Npm @('run','build'); exit 0 }
+if ($Task -eq 'test') { Invoke-Npm @('test'); exit 0 }
+if ($Task -eq 'ingest') { & $NodePath 'scripts/ingest.mjs' $Document; exit $LASTEXITCODE }
+if ($Task -eq 'serve' -and -not (Test-Path -LiteralPath '.next/BUILD_ID')) {
+    Write-Host 'Building Next.js for the first run...'
+    Invoke-Npm @('run','build')
+}
+$runArguments = @('scripts/run.mjs')
+if ($Task -eq 'dev') { $runArguments += '--dev' }
+if ($PSBoundParameters.ContainsKey('Port')) { $runArguments += @('--port',[string]$Port) }
+if ($Lan) { $runArguments += '--lan' }
+& $NodePath @runArguments
+exit $LASTEXITCODE

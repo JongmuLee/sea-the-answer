@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseCsv,toCsv} from '../ui/csv.js';
-import {textToSections,sectionsToText} from '../ui/pdf.js';
+import {parseCsv,toCsv} from '../src/lib/csv.js';
+import {textToSections,sectionsToText} from '../src/lib/pdf.js';
 test('CSV preserves quoted commas, Unicode, newlines and numeric units; rejects incomplete rows',()=>{
  const row={ship:'vessel-1',date:'2026-09-28',fuel:10,factor:3.114,distance:200,speed:11,fuelType:'연료, 검증',note:'첫 줄\n둘째 "줄"'};
  const r=parseCsv(toCsv([row]))[0];assert.equal(r.fuel,10);assert.equal(r.fuelType,row.fuelType);assert.equal(r.note,row.note);assert.equal(r.draft,null);

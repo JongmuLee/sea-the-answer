@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { lanInterfaces } from '../backend/network.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-test('Windows launchers: CMD local, PowerShell local, CMD LAN; same-origin API on LAN address', { skip: process.platform !== 'win32', timeout: 60000 }, async () => {
+test('Windows launchers: CMD local, PowerShell local, CMD LAN; same-origin API on LAN address', { skip: process.platform !== 'win32', timeout: 300000 }, async () => {
   // Keep diagnostics, like the Chrome smoke check, for Windows launcher troubleshooting.
   mkdirSync(join(root, '.verification'), { recursive: true });
   const temp = mkdtempSync(join(root, '.verification', 'launcher-'));
@@ -29,8 +29,9 @@ test('Windows launchers: CMD local, PowerShell local, CMD LAN; same-origin API o
       try {
         const local = `http://127.0.0.1:${port}`;
         let health;
-        for (let i = 0; i < 150; i++) {
-          try { health = await (await fetch(local + '/api/health')).json(); break; } catch { await new Promise(r => setTimeout(r, 75)); }
+        // The first Windows start may build Next.js before the public server opens.
+        for (let i = 0; i < 1800; i++) {
+          try { health = await (await fetch(local + '/api/health', { signal: AbortSignal.timeout(1000) })).json(); break; } catch { await new Promise(r => setTimeout(r, 100)); }
           if (child.exitCode !== null) break;
         }
         assert.ok(health?.ok, `${config.name}: ${logs}`);

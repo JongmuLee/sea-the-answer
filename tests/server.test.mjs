@@ -42,7 +42,7 @@ test('HTTP integration: ingestion, search, tools, persistence, input and origin 
     const malformed = await fetch(base + '/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Haedap-Token': health.csrfToken }, body: '{bad' });
     assert.equal(malformed.status, 400);
     for (const path of ['/data/haedap.sqlite', '/.env', '/backend/db.mjs', '/knowledge/seed.json', '/server.mjs', '/.backup/', '/legacy-ui/app.js', '/backend-ui.js']) assert.equal((await fetch(base + path)).status, 404, path);
-    for (const path of ['/', '/app.js', '/ui/api.js', '/ui/state.js', '/ui/views.js', '/ui/operations-view.js', '/ui/report-view.js', '/ui/helpers.js', '/ui/sample-data.js', '/ui/icons.js', '/ui/ui.css', '/fonts/prototype/fonts.css', '/style.css']) assert.equal((await fetch(base + path)).status, 200, path);
+    assert.equal((await fetch(base+'/')).status,503,'API-only process explains how to start Next.js');
     const calc = await (await post('/api/tools/calculate_emissions', { fuel: 100, factor: 3, dwt: 1000, distance: 100 })).json();
     assert.equal(calc.result.emission, 300);
     assert.equal((await post('/api/tools/calculate_emissions', { fuel: '100' })).status, 400);

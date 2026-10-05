@@ -1,10 +1,10 @@
-# 서버와 팀 모듈 연결 — 1.2.2
+# 서버와 팀 모듈 연결 — 1.3.0
 
-업데이트: 2026-09-30. 실행·업무 안내는 상위 `README.md`를 기준으로 합니다.
+업데이트: 2026-10-05. 실행·업무 안내는 상위 `README.md`를 기준으로 합니다.
 
 ## 현재 구성
 
-브라우저 ES 모듈 → `ui/api.js` → Node HTTP API → SQLite입니다. UI 메뉴는 통합 질문, 문서, 운항 정보, 보고서, 관리입니다. Next.js, PostgreSQL, ChromaDB, Python Tool, Local LLM으로 이전하는 작업은 포함하지 않습니다.
+Next.js App Router·React 화면 → `src/lib/api.js` → 동일 출처 Node HTTP API → SQLite입니다. `scripts/run.mjs`가 Next.js를 loopback 임시 포트로 실행하고 `server.mjs`를 사용자 접속 주소(기본 5173)에 실행합니다. `/api/*`는 기존 API가 직접 처리하고 나머지 화면 요청은 Next.js에 전달합니다. Host·Origin·CSRF·세션 검사와 DB 형식은 유지합니다. UI 메뉴는 통합 질문, 문서, 운항 정보, 보고서, 관리입니다. PostgreSQL, ChromaDB, Python Tool, Local LLM으로 이전하는 작업은 포함하지 않습니다.
 
 기존 테이블 `documents/chunks/chunks_fts/reports/tool_runs/queries`는 그대로 유지합니다. 새로 `users/document_meta/document_files/chunk_pages/ships/operations/report_meta/audit/query_owner/changes/settings`를 추가합니다. PDF 원본은 Base64 형태로 SQLite에 저장합니다. 향후 대용량 문서 환경에서는 별도 파일 저장소와 스트리밍 처리가 적합합니다.
 
@@ -119,7 +119,7 @@ CII 표시 계약은 `cii:{status:"available",value,unit,rating,year,method}` �
 
 현재 기준 비교는 사용자가 직접 확인한 근거 구절과 수치를 비교합니다. `criterion`은 `documentId,chunkId,quote,metric,operator,limit,confirmed`를 받습니다. 원문 구절 포함 여부·문서 권한·현재 적용 버전을 확인합니다. 수치 기준의 규정상 의미·선박 적용 여부는 사용자의 검토를 전제로 하며 LLM이 자동 인증하지 않습니다.
 
-브라우저의 입력·상태·결과 UI를 유지한 채 `backend/analysis.mjs`, `backend/rag.mjs`, `ui/api.js` 경계를 교체하면 됩니다. 인증과 인용 권한 검사를 우회하지 마세요.
+브라우저의 입력·상태·결과 UI를 유지한 채 `backend/analysis.mjs`, `backend/rag.mjs`, `src/lib/api.js` 경계를 교체하면 됩니다. 인증과 인용 권한 검사를 우회하지 마세요.
 
 ## 백업과 한계
 
