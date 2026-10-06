@@ -1,12 +1,12 @@
 param(
     [ValidateRange(1,65535)][int]$Port = 5173,
     [ValidateSet('serve','dev','build','test','ingest','check')][string]$Task = 'serve',
-    [string]$Document = 'knowledge/seed.json',
+    [string]$Document = 'backend/knowledge/seed.json',
     [switch]$Lan,
     [string]$NodePath
 )
 $ErrorActionPreference = 'Continue'
-Set-Location -LiteralPath $PSScriptRoot
+Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 $nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
 if (-not $NodePath -and $env:HAEDAP_NODE) { $NodePath = $env:HAEDAP_NODE }
 if (-not $NodePath -and $nodeCommand) { $NodePath = $nodeCommand.Source }
@@ -26,14 +26,14 @@ function Invoke-Npm([string[]]$NpmArgs) {
 }
 if (-not (Test-Path -LiteralPath 'node_modules/next/package.json')) {
     Write-Host 'Installing dependencies (internet is required for the first installation)...'
-    Invoke-Npm @('ci')
+    Invoke-Npm -NpmArgs @('ci')
 }
-if ($Task -eq 'build') { Invoke-Npm @('run','build'); exit 0 }
-if ($Task -eq 'test') { Invoke-Npm @('test'); exit 0 }
+if ($Task -eq 'build') { Invoke-Npm -NpmArgs @('run','build'); exit 0 }
+if ($Task -eq 'test') { Invoke-Npm -NpmArgs @('test'); exit 0 }
 if ($Task -eq 'ingest') { & $NodePath 'scripts/ingest.mjs' $Document; exit $LASTEXITCODE }
-if ($Task -eq 'serve' -and -not (Test-Path -LiteralPath '.next/BUILD_ID')) {
+if ($Task -eq 'serve' -and -not (Test-Path -LiteralPath 'frontend/.next/BUILD_ID')) {
     Write-Host 'Building Next.js for the first run...'
-    Invoke-Npm @('run','build')
+    Invoke-Npm -NpmArgs @('run','build')
 }
 $runArguments = @('scripts/run.mjs')
 if ($Task -eq 'dev') { $runArguments += '--dev' }

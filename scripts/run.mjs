@@ -25,7 +25,7 @@ if (config.help) {
 }
 if (!dev) {
   try {
-    await access(resolve(root, '.next/BUILD_ID'));
+    await access(resolve(root, 'frontend/.next/BUILD_ID'));
   } catch {
     console.error('먼저 npm run build를 실행해 주세요.');
     process.exit(1);
@@ -40,7 +40,7 @@ const children = [],
   env = {
     ...process.env,
     NEXT_TELEMETRY_DISABLED: '1',
-    ...(dev ? { HAEDAP_NEXT_DIST: '.next-dev' } : {}),
+    HAEDAP_NEXT_DIST: dev ? '.next-dev' : '.next',
   };
 let stopping = false;
 function stop(code = 0) {
@@ -78,6 +78,7 @@ function launch(file, argv, overrides = {}) {
 for (const s of ['SIGINT', 'SIGTERM']) process.on(s, () => stop(0));
 const next = launch(resolve(root, 'node_modules/next/dist/bin/next'), [
   dev ? 'dev' : 'start',
+  'frontend',
   ...(dev ? ['--webpack'] : []),
   '-H',
   '127.0.0.1',
@@ -103,7 +104,7 @@ if (!ready) {
   console.error('Next.js 시작 시간을 초과했습니다.');
   stop(1);
 } else {
-  launch(resolve(root, 'server.mjs'), serverArgs, {
+  launch(resolve(root, 'backend/server.mjs'), serverArgs, {
     HAEDAP_FRONTEND_ORIGIN: origin,
   });
 }

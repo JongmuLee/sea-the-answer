@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const child = spawn(
   process.execPath,
-  ['node_modules/next/dist/bin/next', 'build', '--webpack'],
+  ['node_modules/next/dist/bin/next', 'build', 'frontend', '--webpack'],
   {
     cwd: root,
     stdio: 'inherit',

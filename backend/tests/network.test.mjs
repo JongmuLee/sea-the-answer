@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNetworkPolicy, lanInterfaces, serverOptions } from '../backend/network.mjs';
+import { createNetworkPolicy, lanInterfaces, serverOptions } from '../network.mjs';
 
 const interfaces = [{ name: 'Wi-Fi', address: '192.168.10.5', cidr: '192.168.10.5/24' }];
 const req = (host, remoteAddress = '127.0.0.1') => ({ headers: { host }, socket: { remoteAddress } });

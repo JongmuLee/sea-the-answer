@@ -1,18 +1,18 @@
 import http from 'node:http';
-import { frontendProxy } from './backend/frontend-proxy.mjs';
+import { frontendProxy } from './frontend-proxy.mjs';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { openDatabase, importDocuments } from './backend/db.mjs';
-import { automaticBackup } from './backend/workspace.mjs';
-import { createApi } from './backend/api.mjs';
+import { projectRoot, databasePath } from './paths.mjs';
+import { openDatabase, importDocuments } from './db.mjs';
+import { automaticBackup } from './workspace.mjs';
+import { createApi } from './api.mjs';
 import {
   serverOptions,
   lanInterfaces,
   createNetworkPolicy,
-} from './backend/network.mjs';
+} from './network.mjs';
 
-const root = dirname(fileURLToPath(import.meta.url));
+const root = projectRoot;
 const frontend = frontendProxy(process.env.HAEDAP_FRONTEND_ORIGIN);
 try {
   process.loadEnvFile(resolve(root, '.env'));
@@ -28,7 +28,7 @@ try {
 }
 if (config.help) {
   console.log(
-    'Usage: node server.mjs [--lan] [--port 5173]\nDefault: this PC only. --lan: devices on connected IPv4 subnets.',
+    'Usage: node backend/server.mjs [--lan] [--port 5173]\nDefault: this PC only. --lan: devices on connected IPv4 subnets.',
   );
   process.exit(0);
 }
@@ -36,19 +36,17 @@ const { port } = config;
 // Local mode needs only loopback; do not require LAN enumeration permissions.
 const interfaces = config.lan ? lanInterfaces() : [];
 const allowRequest = createNetworkPolicy(config, interfaces);
-const db = openDatabase(
-  resolve(root, process.env.HAEDAP_DB_PATH || 'data/haedap.sqlite'),
-);
+const dbPath = databasePath();
+const db = openDatabase(dbPath);
 // Seed once; subsequent starts must not replace a user's newer imported revisions.
 if (!db.prepare('SELECT id FROM documents LIMIT 1').get())
   importDocuments(
     db,
-    JSON.parse(await readFile(resolve(root, 'knowledge/seed.json'), 'utf8')),
+    JSON.parse(
+      await readFile(resolve(root, 'backend/knowledge/seed.json'), 'utf8'),
+    ),
   );
-const backupDir = resolve(
-  dirname(resolve(root, process.env.HAEDAP_DB_PATH || 'data/haedap.sqlite')),
-  'backups',
-);
+const backupDir = resolve(dirname(dbPath), 'backups');
 const api = createApi(db, { allowRequest, backupDir });
 const autoBackupTimer = setInterval(() => {
   try {
@@ -79,7 +77,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith('/api/')) return api(req, res, pathname);
   if (
     pathname.split('/').some((part) => part.startsWith('.')) ||
-    /^\/(backend|src|data|knowledge|tests|scripts|legacy-ui|node_modules)(\/|$)/.test(
+    /^\/(frontend|backend|src|data|knowledge|tests|scripts|legacy-ui|node_modules)(\/|$)/.test(
       pathname,
     ) ||
     [
@@ -122,6 +120,7 @@ server.on('error', (error) => {
   process.exitCode = 1;
 });
 server.listen(port, config.host, () => {
+  console.log(`DB: ${dbPath}`);
   console.log(
     `SEA THE ANSWER (Next.js): http://127.0.0.1:${port}\nMode: ${config.lan ? 'LAN' : 'Local (this PC only)'}`,
   );

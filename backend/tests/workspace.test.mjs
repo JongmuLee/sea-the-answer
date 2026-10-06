@@ -5,8 +5,8 @@ import {once} from 'node:events';
 import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {openDatabase,importDocuments,saveReport} from '../backend/db.mjs';
-import {createApi} from '../backend/api.mjs';
+import {openDatabase,importDocuments,saveReport} from '../db.mjs';
+import {createApi} from '../api.mjs';
 const seed=JSON.parse(readFileSync(new URL('../knowledge/seed.json',import.meta.url),'utf8'));
 async function fixture(t){const dir=mkdtempSync(join(tmpdir(),'haedap-core-')),db=openDatabase(join(dir,'test.sqlite'));importDocuments(db,seed);saveReport(db,{title:'이전 공용 초안',type:'규정 검토',text:'기존 내용을 보존합니다.',sources:[],version:0});const api=createApi(db,{backupDir:join(dir,'backups'),env:{}}),server=http.createServer((req,res)=>api(req,res,new URL(req.url,'http://localhost').pathname));server.listen(0,'127.0.0.1');await once(server,'listening');const base='http://127.0.0.1:'+server.address().port;t.after(async()=>{await new Promise(r=>server.close(r));db.close();rmSync(dir,{recursive:true,force:true});});
  function client(){const cookies=new Map();let token='';return {async call(path,body){const r=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; '),'Content-Type':'application/json','X-Haedap-Token':token},body:body===undefined?undefined:JSON.stringify(body)});for(const header of r.headers.getSetCookie()){const [k,v]=header.split(';')[0].split('=');if(v)cookies.set(k,v);else cookies.delete(k);}const data=await r.json();if(path==='/api/health')token=data.csrfToken;return {...data,status:r.status};},async ok(path,body){const r=await this.call(path,body);assert.equal(r.status,200,JSON.stringify(r));return r;}};}
@@ -50,7 +50,7 @@ test('criterion comparison covers met/unmet/unknown and invalid source rejection
 test('backup imports are verified and daily backup runs once; CSV rejects within-batch anomalies',async t=>{const {admin,db}=await fixture(t);await admin.ok('/api/changes',{kind:'ship.save',payload:ship});const check=await admin.ok('/api/operations/validate',{rows:[row,{...row,date:'2026-09-29',fuel:100}]});assert.equal(check.valid,false);assert.equal(check.errors[0].row,2);
  const b=(await admin.ok('/api/backups',{})).backup,payload=await admin.ok('/api/backups/'+b.id);delete payload.status;const imported=await admin.ok('/api/backups/import',payload);assert.notEqual(imported.backup.id,b.id);assert.equal((await admin.call('/api/backups/import',{...payload,checksum:'bad'})).status,400);
  await admin.ok('/api/backups/settings',{autoBackup:'off'});assert.equal((await admin.ok('/api/backups')).autoBackup,'off');
- const {automaticBackup}=await import('../backend/workspace.mjs');const temp=mkdtempSync(join(tmpdir(),'haedap-auto-'));t.after(()=>rmSync(temp,{recursive:true,force:true}));await admin.ok('/api/backups/settings',{autoBackup:'daily'});automaticBackup(db,temp);const count=db.prepare("SELECT count(*) n FROM audit WHERE actor='자동 백업'").get().n;automaticBackup(db,temp);assert.equal(db.prepare("SELECT count(*) n FROM audit WHERE actor='자동 백업'").get().n,count);assert.equal(count,1);
+ const {automaticBackup}=await import('../workspace.mjs');const temp=mkdtempSync(join(tmpdir(),'haedap-auto-'));t.after(()=>rmSync(temp,{recursive:true,force:true}));await admin.ok('/api/backups/settings',{autoBackup:'daily'});automaticBackup(db,temp);const count=db.prepare("SELECT count(*) n FROM audit WHERE actor='자동 백업'").get().n;automaticBackup(db,temp);assert.equal(db.prepare("SELECT count(*) n FROM audit WHERE actor='자동 백업'").get().n,count);assert.equal(count,1);
 });
 
 test('public access, fixed administrator login/logout, private guest drafts and server-side management guards',async t=>{
@@ -86,7 +86,7 @@ test('public visitor cannot overwrite a restricted document by reusing its logic
 });
 
 test('existing database migration preserves ownership and installs admin / 1234 only once',async t=>{
- const {initializeWorkspace,initializePublicAccess,saveUser,authenticate}=await import('../backend/workspace.mjs');
+ const {initializeWorkspace,initializePublicAccess,saveUser,authenticate}=await import('../workspace.mjs');
  const dir=mkdtempSync(join(tmpdir(),'haedap-migration-')),file=join(dir,'db.sqlite');let db=openDatabase(file);t.after(()=>{db.close();rmSync(dir,{recursive:true,force:true});});
  initializeWorkspace(db);const old=saveUser(db,null,{username:'admin',name:'기존 관리자',password:'previous-password'},true);
  saveReport(db,{title:'이전 보고서',type:'규정 검토',text:'보존',sources:[],version:0});initializePublicAccess(db);

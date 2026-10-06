@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import runtime from '../scripts/check-runtime.cjs';
+import runtime from '../check-runtime.cjs';
 
 test('runtime preflight exercises actual in-memory FTS5 search and BM25', () => {
   assert.equal(runtime.checkRuntime().fts5, true);
-  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/check-runtime.cjs', import.meta.url))], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../check-runtime.cjs', import.meta.url))], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /SQLite \+ FTS5 ready/);
 });

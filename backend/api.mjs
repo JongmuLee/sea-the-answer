@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { databasePath } from './paths.mjs';
 import { AppError, requireValue } from './validation.mjs';
 import { retrieve } from './db.mjs';
 import { modelConfigured } from './rag.mjs';
@@ -13,7 +14,7 @@ export function createApi(db,options={}) {
  w.initializeWorkspace(db);
  w.initializePublicAccess(db);
  const token=randomBytes(32).toString('hex'),sessions=new Map(),attempts=new Map();let active=0;
- const backupDir=options.backupDir||resolve('data/backups');
+ const backupDir=options.backupDir||resolve(dirname(databasePath()),'backups');
  const digest=s=>createHash('sha256').update(s).digest('hex');
  const sessionFor=req=>{const id=(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith('haedap_session='))?.slice(15);const session=id?sessions.get(digest(id)):null;if(!session||session.expires<Date.now())return null;const u=db.prepare('SELECT * FROM users WHERE id=? AND active=1').get(session.userId);return u&&u.version===session.version?w.publicUser(u):null;};
  const cookieValue=(req,name)=>(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(name+'='))?.slice(name.length+1);
@@ -27,7 +28,7 @@ export function createApi(db,options={}) {
    requireValue(!req.headers.origin||req.headers.origin===`http://${host}`,'동일 출처 요청만 허용합니다.','ORIGIN_DENIED',403);
    requireValue(!['cross-site','same-site'].includes(req.headers['sec-fetch-site']),'동일 출처 요청만 허용합니다.','ORIGIN_DENIED',403);
    const guest=guestFor(req,res);user=sessionFor(req)||guest;const setupRequired=false;
-   if(req.method==='GET'&&path==='/api/health')return json(res,200,{ok:true,storage:'sqlite',retrieval:'fts5-bm25-ko-bigram',llmConfigured:modelConfigured(options.env),csrfToken:token,user,setupRequired,documents:user?w.workspaceDocuments(db,user).filter(d=>d.active).length:0,version:'1.3.0',authenticated:w.isAdmin(user),publicAccess:true});
+   if(req.method==='GET'&&path==='/api/health')return json(res,200,{ok:true,storage:'sqlite',retrieval:'fts5-bm25-ko-bigram',llmConfigured:modelConfigured(options.env),csrfToken:token,user,setupRequired,documents:user?w.workspaceDocuments(db,user).filter(d=>d.active).length:0,version:'1.3.1',authenticated:w.isAdmin(user),publicAccess:true});
    if(path!=='/api/health'&&!path.startsWith('/api/auth/')&&req.headers['x-haedap-identity'])requireValue(req.headers['x-haedap-identity']===user.id,'사용자 상태가 바뀌었습니다. 다시 연결해 주세요.','AUTH_REQUIRED',401);
    if(req.method==='GET') {
     requireValue(user,'로그인이 필요합니다.','AUTH_REQUIRED',401);

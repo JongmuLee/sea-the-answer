@@ -6,9 +6,9 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { lanInterfaces } from '../backend/network.mjs';
+import { lanInterfaces } from '../../backend/network.mjs';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
+const root = fileURLToPath(new URL('../../', import.meta.url));
 test('Windows launchers: CMD local, PowerShell local, CMD LAN; same-origin API on LAN address', { skip: process.platform !== 'win32', timeout: 300000 }, async () => {
   // Keep diagnostics, like the Chrome smoke check, for Windows launcher troubleshooting.
   mkdirSync(join(root, '.verification'), { recursive: true });
@@ -17,8 +17,8 @@ test('Windows launchers: CMD local, PowerShell local, CMD LAN; same-origin API o
   try {
     const configurations = [
       { name: 'double-click entry point', command: 'cmd.exe', args: ['/d', '/c', 'start.cmd'], lan: false },
-      { name: 'terminal entry point', command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'start.ps1'], lan: false },
-      { name: 'LAN double-click entry point', command: 'cmd.exe', args: ['/d', '/c', 'start-lan.cmd'], lan: true },
+      { name: 'terminal entry point', command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/start.ps1'], lan: false },
+      { name: 'LAN double-click entry point', command: 'cmd.exe', args: ['/d', '/c', 'start.cmd', '-Lan'], lan: true },
     ];
     for (const [index, config] of configurations.entries()) {
       const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');

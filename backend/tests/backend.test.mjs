@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep, basename } from 'node:path';
-import { openDatabase, importDocuments, retrieve, listDocuments, getReport, saveReport } from '../backend/db.mjs';
-import { prepareDocument } from '../backend/knowledge.mjs';
-import { calculateEmissions, voyageTime, runTool } from '../backend/tools.mjs';
-import { answerQuestion } from '../backend/rag.mjs';
+import { openDatabase, importDocuments, retrieve, listDocuments, getReport, saveReport } from '../db.mjs';
+import { prepareDocument } from '../knowledge.mjs';
+import { calculateEmissions, voyageTime, runTool } from '../tools.mjs';
+import { answerQuestion } from '../rag.mjs';
 
 const seed = JSON.parse(readFileSync(new URL('../knowledge/seed.json', import.meta.url), 'utf8'));
 function fixture(t) { const db = openDatabase(':memory:'); importDocuments(db, seed); t.after(() => db.close()); return db; }
