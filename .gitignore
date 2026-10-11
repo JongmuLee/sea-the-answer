@@ -6,7 +6,16 @@ __pycache__/
 .next-dev/
 data/
 .env
+.env.*
+!.env.example
 .verification/
 *.log
 frontend/AGENTS.md
 frontend/CLAUDE.md
+
+# Python maritime tools
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+outputs/

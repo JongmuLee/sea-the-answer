@@ -8,6 +8,46 @@
 
 | 항목 | 용도 |
 |---|---|
+| 통합 질문 | 문서 근거 + 선택한 선박·기간의 운항 수치·추이를 함께 답변, 근거 페이지·원문 PDF 열기, 입력 기준 비교, 보고서에 담기 |
+| 문서 | 텍스트 PDF 등록·추출 검토, 메타데이터·열람 범위, 개정 버전 관리 |
+| 운항 정보 | 선박·일별 기록 관리, CSV 일괄 등록, 지표 차트·선박 비교, 배출량·항해 시간 계산 |
+| 보고서 | Noon / MRV 검토 초안 자동 생성, 편집·저장, 검토 요청 → 관리자 승인 |
+| 관리 | 계정·역할, 승인, 질의·변경·오류 로그, 백업·복구 |
+
+일반 기능은 로그인 없이 쓰고, 등록·수정·삭제·승인·백업은 관리자(기본 **`admin / 1234`**)만 할 수 있습니다.
+
+**현재 구현 범위**: 문서 검색은 SQLite FTS5(BM25) 키워드 검색, 답변은 기본적으로 원문 발췌이며, 외부 LLM은 `.env`로 켜는 선택 기능입니다. 벡터·하이브리드 RAG, Local LLM, 공식 CII 계산, 규정 적용 자동 판정, DOCX·PPT 등록은 아직 연결 전입니다. 자세한 범위와 연결 계획은 [`docs/plans/2026-10-08-team-module-integration.md`](docs/plans/2026-10-08-team-module-integration.md)를 보세요.
+
+## 프로젝트 구조
+
+```text
+sea-the-answer/
+├─ frontend/            Next.js 16 App Router + React 19 화면 (JSX) — 사용자가 접속하는 공개 진입점
+│  ├─ src/app/          페이지 라우트: /chat, /documents, /operations, /reports, /admin
+│  ├─ src/views/        화면 JSX
+│  ├─ src/workspace/    상태 Provider·컨트롤러(이벤트, API 호출)
+│  ├─ src/lib/          API 클라이언트, CSV·PDF 처리, 상태 모델
+│  ├─ src/styles/       CSS
+│  ├─ public/           글꼴, PDF.js, Leaflet 등 오프라인 정적 리소스
+│  └─ tests/
+├─ backend/             Node.js HTTP API + SQLite
+│  ├─ server.mjs        내부 API 서버(127.0.0.1:8000). Next.js가 /api/* 를 이리로 전달
+│  ├─ api.mjs           라우팅·인증·CSRF
+│  ├─ workspace.mjs     권한·CRUD·승인·보고서·백업
+│  ├─ db.mjs, knowledge.mjs, rag.mjs   DB·문서 인덱싱·검색·답변
+│  ├─ analysis.mjs, tools.mjs          운항 집계·통합 답변·계산 도구
+│  ├─ knowledge/seed.json              최초 실행 시 넣는 기본 문서
+│  ├─ data/             (실행 시 생성) SQLite DB와 backups/
+│  ├─ maritime_data/    (선택) Python 조회·계산 Tool + PostgreSQL 전처리·SQL·테스트
+│  └─ tests/
+├─ scripts/             일반 실행(run.mjs)·Windows 실행기(start.cmd, start.ps1)·문서 수집·브라우저 검증
+├─ docs/                설계·명세·계획·ADR 등 모든 프로젝트 문서
+├─ package.json         의존성과 npm 명령 (설치는 최상위에서 한 번)
+├─ .env.example         환경설정 예시
+└─ AGENTS.md            사람·에이전트 공통 작업 지침
+```
+
+구조와 요청 흐름은 [`docs/architecture.md`](docs/architecture.md)에 자세히 정리했습니다.
 | Node.js 24 이상과 npm | Next.js 화면 빌드·실행 |
 | Python 3.11 이상 | FastAPI 실행 |
 | `uv` | `backend/pyproject.toml`과 `backend/uv.lock`에 맞춰 Python 의존성 설치·실행 |
@@ -18,6 +58,7 @@
 
 ## 처음 설치하고 실행하기
 
+기본 앱에는 별도의 DB 서버, Python, Docker가 필요 없습니다. 선택 기능인 해사 데이터 Tool은 Python 3.12/3.13과 별도 PostgreSQL을 사용합니다. npm 패키지는 `next`, `react`, `react-dom`과 개발용 `playwright`뿐이며 `npm ci`가 자동 설치합니다.
 1. PostgreSQL에 이 앱 전용 빈 데이터베이스와 사용자를 만듭니다. 아래 예시는 로컬 개발용입니다. 비밀번호는 직접 정하고 Git에 올리지 마세요.
 
    ```sql
@@ -101,6 +142,27 @@ npm test
 
 ## 파일 구조와 변경 이력
 
+## 해사 데이터 Tool (선택)
+
+역할4의 실제 MRV·합성 Noon 전처리, PostgreSQL 적재, 읽기 전용 조회 및 CO₂ 계산 도구는 [`backend/maritime_data/`](backend/maritime_data/)에 있습니다. 기본 Node/SQLite 앱과 별도로 실행하며, 현재 화면·내부 API가 이 도구를 자동 호출하지 않습니다. 원본 데이터·DB·비밀번호는 저장소에 포함하지 않습니다.
+
+설치·실행·데이터 확보·기존 `role4` 환경의 이전은 [운영 안내](docs/user-guide.md#10-해사-데이터-tool-선택)를 따르세요. 호출 형식은 [해사 데이터 API 명세](docs/specs/maritime-data-api.md), 데이터 선택·품질 규칙은 [데이터 명세](docs/specs/maritime-data.md), 테이블·ERD는 [데이터 모델](docs/data-model.md#9-postgresql-해사-데이터-tool-선택)에 있습니다.
+
+## 문서
+
+| 문서 | 내용 |
+|---|---|
+| [`docs/README.md`](docs/README.md) | 전체 문서 목록과 작성 규칙 |
+| [`docs/architecture.md`](docs/architecture.md) | 시스템 구조, 요청 흐름, 모듈 경계, 보안 경계 |
+| [`docs/data-model.md`](docs/data-model.md) | SQLite 및 선택 PostgreSQL 테이블, 상태 값, 백업 범위 |
+| [`docs/user-guide.md`](docs/user-guide.md) | 사용·운영 안내, 문제 해결 |
+| [`docs/specs/`](docs/specs/) | API·통합 답변 등 구현 계약 |
+| [`docs/plans/`](docs/plans/) | 작업 계획과 진행 상태 |
+| [`docs/adr/`](docs/adr/) | 주요 설계 결정 기록 |
+| [`docs/changelog.md`](docs/changelog.md) | 변경 이력과 검증 기록 |
+| [`AGENTS.md`](AGENTS.md) | 사람·코딩 에이전트 공통 작업 지침 |
+
+팀 보고서는 Notion에서 관리합니다: <https://app.notion.com/p/dudco/3dc1cb63e55380e98972eda1ce1040b5>
 `frontend/`는 Next.js 화면, `backend/pyapi/`는 현재 FastAPI·PostgreSQL 구현, `backend/tests/`는 API 테스트, `scripts/`는 실행 도구입니다. `backend/*.mjs`는 이전 Node/SQLite 구현을 보존한 파일입니다. API 계약·DB 구현을 바꾸면 이 README의 실행 예제와 검증 기록도 함께 갱신합니다.
 
 - **2026-10-10:** `uv` 프로젝트·잠금 파일을 `backend/`에 두고 자동 백업, 복구 중 요청 차단, 동시 수정 버전 확인, 검색 범위와 호스트 검사를 보완했습니다. Python API 테스트 9개가 통과했으며 실제 PostgreSQL 연결 검증은 남아 있습니다.
