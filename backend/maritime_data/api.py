@@ -1,6 +1,6 @@
 """Maritime data API. No app accounts, document search or LLM required.
 
-`create_router` is mounted into the main FastAPI app (pyapi.workspace_api) under
+`create_router` is mounted into the main FastAPI app (api.main) under
 /api/maritime-data/* when MARITIME_DATA_API_TOKEN is set. `create_app` keeps the
 standalone app used by the tests and by role-4 tooling.
 """

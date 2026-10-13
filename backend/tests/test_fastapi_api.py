@@ -6,8 +6,10 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from pyapi import workspace_api
-from pyapi.workspace_store import ApiError, Workspace
+from api import config, deps, main
+from api.errors import ApiError
+from api.store import Workspace
+from api.web import backup_job, concurrency, security
 
 
 ADMIN = {"id": "admin-1", "username": "admin", "name": "관리자", "role": "admin", "active": True, "version": 1}
@@ -40,8 +42,6 @@ class FakeWorkspace:
         return ADMIN if user_id == ADMIN["id"] else None
 
     def authenticate(self, username, password):
-        from pyapi.workspace_store import ApiError
-
         if username != "admin" or password != "1234":
             raise ApiError(401, "LOGIN_FAILED", "아이디 또는 비밀번호가 올바르지 않습니다.")
         return ADMIN
@@ -55,10 +55,10 @@ class FakeWorkspace:
 
 
 def test_browser_health_auth_and_question_contract(monkeypatch):
-    monkeypatch.setattr(workspace_api, "Workspace", FakeWorkspace)
-    monkeypatch.setattr(workspace_api, "initialized", False)
-    workspace_api.sessions.clear()
-    client = TestClient(workspace_api.app, base_url="http://localhost:5173")
+    monkeypatch.setattr(deps, "Workspace", FakeWorkspace)
+    monkeypatch.setattr(deps, "initialized", False)
+    security.sessions.clear()
+    client = TestClient(main.app, base_url="http://localhost:5173")
     health = client.get("/api/health")
     assert health.status_code == 200
     assert health.json()["storage"] == "postgresql"
@@ -83,9 +83,9 @@ def test_browser_health_auth_and_question_contract(monkeypatch):
 
 
 def test_request_origin_and_json_errors(monkeypatch):
-    monkeypatch.setattr(workspace_api, "Workspace", FakeWorkspace)
-    monkeypatch.setattr(workspace_api, "initialized", False)
-    client = TestClient(workspace_api.app, base_url="http://localhost:5173")
+    monkeypatch.setattr(deps, "Workspace", FakeWorkspace)
+    monkeypatch.setattr(deps, "initialized", False)
+    client = TestClient(main.app, base_url="http://localhost:5173")
     token = client.get("/api/health").json()["csrfToken"]
     wrong_origin = client.post("/api/ask", headers={"X-Haedap-Token": token, "Origin": "https://other.example"},
                                json={"question": "규정"})
@@ -100,26 +100,26 @@ def test_request_origin_and_json_errors(monkeypatch):
 
 
 def test_restore_requires_exclusive_request_slot():
-    workspace_api.reserve_request("health")
+    concurrency.reserve_request("health")
     try:
         with pytest.raises(ApiError) as error:
-            workspace_api.reserve_request("backups/restore")
+            concurrency.reserve_request("backups/restore")
         assert error.value.status == 409
     finally:
-        workspace_api.release_request("health")
-    workspace_api.reserve_request("backups/restore")
+        concurrency.release_request("health")
+    concurrency.reserve_request("backups/restore")
     try:
         with pytest.raises(ApiError) as error:
-            workspace_api.reserve_request("health")
+            concurrency.reserve_request("health")
         assert error.value.status == 409
     finally:
-        workspace_api.release_request("backups/restore")
+        concurrency.release_request("backups/restore")
 
 
 def test_restore_rejects_database_lock_held_by_another_worker():
     db = SimpleNamespace(one=lambda _sql, _params: {"locked": False})
     with pytest.raises(ApiError) as error:
-        workspace_api.database_request_lock(db, exclusive=True)
+        concurrency.database_request_lock(db, exclusive=True)
     assert error.value.status == 409
     assert error.value.code == "BUSY"
 
@@ -148,16 +148,16 @@ def test_automatic_backup_runs_once_per_utc_day(monkeypatch, tmp_path):
         def create_backup(self, _admin, _directory, _label):
             calls.append("backup")
 
-    monkeypatch.setattr(workspace_api, "Workspace", BackupWorkspace)
-    monkeypatch.setattr(workspace_api, "initialized", True)
-    monkeypatch.setattr(workspace_api, "backup_directory", lambda: tmp_path)
-    workspace_api.automatic_backup_once()
-    workspace_api.automatic_backup_once()
+    monkeypatch.setattr(deps, "Workspace", BackupWorkspace)
+    monkeypatch.setattr(deps, "initialized", True)
+    monkeypatch.setattr(config, "backup_directory", lambda: tmp_path)
+    backup_job.automatic_backup_once()
+    backup_job.automatic_backup_once()
     assert calls == ["backup"]
     assert state["autoBackupDay"] == today
     state["autoBackup"] = "off"
     state["autoBackupDay"] = ""
-    workspace_api.automatic_backup_once()
+    backup_job.automatic_backup_once()
     assert calls == ["backup"]
 
 

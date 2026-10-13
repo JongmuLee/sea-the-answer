@@ -23,13 +23,13 @@ FROM base AS dev
 COPY pyproject.toml uv.lock .python-version ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked
 # Source is bind-mounted over /app by compose.dev.yaml.
-CMD ["uvicorn", "pyapi.workspace_api:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--proxy-headers", "--forwarded-allow-ips", "*"]
 
 FROM base AS prod
 COPY pyproject.toml uv.lock .python-version ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-default-groups
-COPY pyapi ./pyapi
+COPY api ./api
 COPY maritime_data ./maritime_data
 COPY knowledge ./knowledge
 USER app
-CMD ["uvicorn", "pyapi.workspace_api:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

@@ -11,9 +11,9 @@ TOKEN = "test-only-maritime_data-token-12345678901234567890"
 def test_maritime_routes_are_mounted_when_token_is_set(monkeypatch):
     monkeypatch.setenv("MARITIME_DATA_API_TOKEN", TOKEN)
     monkeypatch.setenv("MARITIME_DATA_DATABASE_URL", "sqlite://")
-    from pyapi import workspace_api
+    from api import main
 
-    module = importlib.reload(workspace_api)
+    module = importlib.reload(main)
     try:
         client = TestClient(module.app)
         assert client.get("/api/maritime-data/factors").status_code == 401
@@ -27,8 +27,8 @@ def test_maritime_routes_are_mounted_when_token_is_set(monkeypatch):
 
 def test_maritime_routes_are_absent_without_token(monkeypatch):
     monkeypatch.delenv("MARITIME_DATA_API_TOKEN", raising=False)
-    from pyapi import workspace_api
+    from api import main
 
-    module = importlib.reload(workspace_api)
+    module = importlib.reload(main)
     assert module.maritime_engine is None
     assert not any(getattr(route, "path", "").startswith("/api/maritime-data") for route in module.app.routes)
