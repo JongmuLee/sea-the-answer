@@ -1,6 +1,7 @@
 // End-to-end tests. They drive the real UI → Next.js proxy → FastAPI → PostgreSQL.
 // The workspace must start EMPTY (the flow loads the sample data and checks counts):
-//   docker compose --profile e2e up --build --exit-code-from e2e e2e   (recommended, isolated DB)
+//   docker compose --profile e2e up --build --force-recreate --exit-code-from e2e e2e   (recommended, isolated DB)
+//   docker compose --profile e2e down                                                      (afterwards)
 //   E2E_BASE_URL=http://127.0.0.1:5173 npx playwright test           (against a fresh local stack)
 import { defineConfig, devices } from '@playwright/test';
 

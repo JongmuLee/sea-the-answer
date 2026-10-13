@@ -125,9 +125,17 @@ docker compose run --rm migrate rollback             # 마지막 파일 되돌�
 |---|---|---|
 | backend 단위·API | `backend/` | `uv run pytest` |
 | frontend 단위 | `frontend/` | `npm test` |
-| e2e (화면 → API → DB 전체 흐름) | 최상위 | `docker compose --profile e2e up --build --exit-code-from e2e e2e` |
+| e2e (화면 → API → DB 전체 흐름) | 최상위 | 아래 두 줄 |
 
-e2e는 앱과 분리된 테스트 스택(`e2e-db`·`e2e-backend`·`e2e-frontend`)을 띄우고, 메모리(tmpfs) DB에서 매번 빈 상태로 시작합니다. 앱 데이터에 영향이 없고, 호스트에 포트를 열지 않으므로 앱이 실행 중이어도 됩니다. 명령의 종료 코드가 테스트 결과이며, 실패 시 스크린샷·trace는 `e2e/test-results/`, HTML 보고서는 `e2e/playwright-report/`에 생깁니다. 테스트 스택 정리: `docker compose --profile e2e down`.
+```bash
+docker compose --profile e2e up --build --force-recreate --exit-code-from e2e e2e   # 테스트 (종료 코드 = 결과)
+docker compose --profile e2e down                                                      # 테스트 스택 정리
+```
+
+e2e는 앱과 분리된 테스트 스택(`e2e-db`·`e2e-migrate`·`e2e-backend`·`e2e-frontend`)을 띄웁니다. DB는 메모리(tmpfs)에 있어 앱 데이터에 영향이 없고, 호스트에 포트를 열지 않으므로 앱이 실행 중이어도 됩니다. 실패 시 스크린샷·trace는 `e2e/test-results/`, HTML 보고서는 `e2e/playwright-report/`에 생깁니다.
+
+- **`--force-recreate`를 빼지 마세요.** 테스트가 끝나도 Compose는 `e2e` 컨테이너만 멈추고 의존 서비스(`e2e-db` 등)는 계속 실행합니다. 이 옵션이 있어야 다음 실행 때 컨테이너를 새로 만들어 빈 DB에서 시작합니다(없으면 이전 데이터가 남아 "예시 데이터 넣기" 단계에서 실패).
+- 의존 서비스까지 자동으로 멈추는 Compose 옵션은 없어서, 끝나면 `down`으로 정리합니다. `--attach-dependencies`는 쓰지 마세요. `e2e-migrate`가 끝나는 순간 중단되어 **테스트를 돌리지 않고도 종료 코드 0**이 나옵니다(2026-10-13 확인).
 
 Docker 없이 e2e를 돌리려면 **빈 DB로 띄운 스택**에 대고 `e2e/`에서 `npm ci`, `npx playwright install chromium`, `npx playwright test`를 실행합니다(주소는 `E2E_BASE_URL`, 기본 `http://127.0.0.1:5173`). 시나리오가 예시 데이터를 넣고 건수를 확인하므로 데이터가 있는 DB에서는 실패합니다.
 

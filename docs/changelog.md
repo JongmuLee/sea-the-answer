@@ -26,6 +26,15 @@
 
 ## 검증 기록
 
+### 2026-10-13 — Docker로 e2e 실행 (macOS, Apple Silicon, PostgreSQL 18.6 이미지)
+
+| 검증 | 결과 |
+|---|---|
+| `docker compose --profile e2e up --build --exit-code-from e2e e2e` | 이미지 빌드부터 e2e-db → e2e-migrate(마이그레이션 적용) → e2e-backend → e2e-frontend → e2e 순서로 실행, 14단계 1개 테스트 통과, 종료 코드 0 |
+| 테스트 종료 후 상태 | `e2e` 컨테이너만 멈추고 e2e-db·e2e-backend·e2e-frontend는 계속 실행됨 → 다시 실행하면 이전 데이터가 남은 DB를 씀 |
+| `--force-recreate --attach-dependencies` 추가 | e2e-migrate가 정상 종료하는 순간 중단되어 테스트가 시작되지 않았고 e2e 컨테이너는 `Exited (0)`, 의존 서비스는 여전히 실행 중 → 사용하지 않음 |
+| `--force-recreate` | 컨테이너를 새로 만들어 DB 초기화와 마이그레이션이 처음부터 다시 적용됨을 로그로 확인 → 표준 명령에 포함하고 종료 후 `down`으로 정리 |
+
 ### 2026-10-13 — dbmate 마이그레이션
 
 환경: 위 기록과 같은 Linux 작업 공간, dbmate 2.36.0(npm), PostgreSQL 16. Docker 데몬이 없어 `amacneil/dbmate` 이미지로 실행하는 `migrate` 서비스 자체는 실행하지 못했습니다.

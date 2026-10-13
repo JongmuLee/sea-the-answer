@@ -66,7 +66,7 @@
 - 서비스 실행 구성은 최상위 `compose.yaml`(운영)·`compose.dev.yaml`(개발)과 각 폴더의 `Dockerfile`에서 관리합니다. 공개 포트는 frontend 하나입니다.
 - 인증·문서 열람 범위·인용 권한 검사를 우회하는 코드를 넣지 않습니다(`docs/architecture.md`의 보안 경계 참고).
 - CII 값·등급, 규정 적용 판정처럼 근거 없는 수치를 화면에 임의로 채우지 않습니다. 산출할 수 없으면 `unavailable`과 사유를 반환합니다.
-- 변경한 쪽의 테스트를 실행합니다: `backend/`에서 `uv run pytest`, `frontend/`에서 `npm test`(+ 빌드 확인은 `npm run build`). 화면 흐름이나 API 동작에 영향이 있으면 최상위에서 `docker compose --profile e2e up --build --exit-code-from e2e e2e`를 실행합니다.
+- 변경한 쪽의 테스트를 실행합니다: `backend/`에서 `uv run pytest`, `frontend/`에서 `npm test`(+ 빌드 확인은 `npm run build`). 화면 흐름이나 API 동작에 영향이 있으면 최상위에서 `docker compose --profile e2e up --build --force-recreate --exit-code-from e2e e2e`를 실행하고, 끝나면 `docker compose --profile e2e down`으로 정리합니다(README "테스트" 참고).
 - DB 스키마는 최상위 `migrations/`에 새 파일을 추가해서 바꿉니다(`docker compose run --rm migrate new <이름>`). **이미 커밋된 마이그레이션 파일은 고치지 않고**, `migrate:down`도 함께 씁니다. `docs/data-model.md`를 같은 작업에서 고칩니다(8절).
 
 ## 6. Next.js 16 버전 주의 (에이전트용)

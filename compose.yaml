@@ -3,7 +3,8 @@
 #   docker compose up --build -d                       # app (production builds) → http://localhost:5173
 #   docker compose run --rm migrate new <name>          # new migration file in migrations/
 #   docker compose -f compose.yaml -f compose.dev.yaml up --build   # development (hot reload)
-#   docker compose --profile e2e up --build --exit-code-from e2e e2e  # end-to-end tests, isolated DB
+#   docker compose --profile e2e up --build --force-recreate --exit-code-from e2e e2e  # end-to-end tests, isolated DB
+#   docker compose --profile e2e down                                # stop the e2e stack afterwards
 #
 # Settings come from the root .env (copy .env.example). See README.md.
 name: haedap
@@ -85,8 +86,12 @@ services:
     restart: unless-stopped
 
   # ---- End-to-end tests (profile "e2e") -------------------------------------------
-  # A separate stack with an in-memory database, so tests never touch app data and
-  # every run starts empty. Nothing is published to the host.
+  # A separate stack with an in-memory database, so tests never touch app data.
+  # Nothing is published to the host. When `e2e` exits, Compose stops only that container:
+  # e2e-db/backend/frontend keep running, so always pass --force-recreate (fresh, empty DB
+  # every run) and clean up with `docker compose --profile e2e down`.
+  # Do NOT use --attach-dependencies: e2e-migrate's normal exit aborts the run before tests
+  # start and still returns exit code 0.
   e2e-db:
     <<: *db
     profiles: [e2e]
