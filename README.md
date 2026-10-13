@@ -35,10 +35,11 @@ sea-the-answer/
 ├─ backend/              FastAPI + PostgreSQL                                       [uv]
 │  ├─ pyproject.toml, uv.lock, .python-version, Dockerfile
 │  ├─ api/               FastAPI 앱 — main.py(진입점), web/(보안·동시성), routes/(도메인별 경로), store/(DB·업무 로직)
-│  ├─ maritime_data/     (선택) 해사 데이터 조회·계산 Tool, 전처리 스크립트
+│  ├─ tools/ (선택) 해사 데이터 조회·계산 Tool (서비스 런타임)
 │  ├─ knowledge/         seed.json(기본 문서), sample-data.json(가상 운항 예시)
 │  └─ tests/             pytest
 ├─ migrations/           DB 스키마 마이그레이션 (SQL, up/down)                        [dbmate]
+├─ scripts/ 오프라인 자료 정규화·전처리·CSV 적재·선박 매핑 (backend uv 환경)
 ├─ e2e/                  Playwright 브라우저 테스트 (화면 → API → DB)                [npm]
 ├─ docs/                 설계·명세·계획·ADR 등 모든 프로젝트 문서
 └─ AGENTS.md             사람·에이전트 공통 작업 지침
@@ -168,7 +169,20 @@ Docker 없이 e2e를 돌리려면 **빈 DB로 띄운 스택**에 대고 `e2e/`�
 
 ## 해사 데이터 Tool (선택)
 
-역할4의 실제 MRV·합성 Noon 전처리, PostgreSQL 적재, 읽기 전용 조회·CO₂ 계산 도구는 [`backend/maritime_data/`](backend/maritime_data/)에 있습니다. backend와 같은 uv 프로젝트이며, `MARITIME_DATA_API_TOKEN`을 설정하면 backend에 `/api/maritime-data/*`로 마운트됩니다(서버 전용 Bearer 토큰 필요, 화면 연결은 아직 없음). 설치·데이터 확보는 [사용 안내 10절](docs/user-guide.md#10-해사-데이터-tool-선택), 호출 형식은 [API 명세](docs/specs/maritime-data-api.md)를 보세요.
+읽기 전용 조회·CO₂ 계산은 [`backend/tools/`](backend/tools/), 자료 정규화·전처리·적재는 [`scripts/`](scripts/)에 있습니다. backend와 같은 uv 환경을 사용하고, 해사 DDL도 루트 `migrations/`에서 앱 DDL과 함께 적용합니다. 기본은 앱과 같은 DB입니다. 기존 `ships`와의 연결은 검토한 명시적 매핑만 허용하며, 연간 MRV를 일별 `operations`로 바꾸거나 외부 선박을 대량 자동 등록하지 않습니다.
+
+자료 준비 명령은 호스트 PC에서 실행하므로 Python·uv가 필요합니다. 먼저 [사용 안내의 DB 연결·migration 준비](docs/user-guide.md#마이그레이션전처리적재검증)를 따르세요. Docker DB를 쓸 때도 로컬 DB 포트와 호스트용 `DATABASE_URL`이 필요합니다.
+
+```powershell
+# 마이그레이션·호스트 DB 연결 준비 후, 저장소 최상위에서 실행합니다.
+uv sync --project backend --group data
+uv run --locked --project backend --group data python -m scripts.prepare_maritime_data --source D:/Data --out data/maritime-data/new-run
+uv run --locked --project backend python -m scripts.load_data --data-dir data/maritime-data/new-run
+# 미리보기에서 입력 파일·건수를 확인한 뒤 적용
+uv run --locked --project backend python -m scripts.load_data --data-dir data/maritime-data/new-run --apply
+```
+
+적재기는 기본 미리보기에서는 DB에 연결하지 않으며 `--apply`에서만 migration 이력을 확인하고 이미 생성된 빈 해사 테이블에 CSV를 넣습니다. DDL은 실행하지 않습니다. `MARITIME_DATA_API_TOKEN`을 설정하면 같은 backend에 `/api/maritime-data/*`가 마운트됩니다(서버 전용 Bearer 토큰 필요, 화면 어댑터는 아직 없음). 별도 해사 DB를 선택한 경우에는 해당 DB에도 기본 init과 해사 마이그레이션이 필요합니다. 자세한 설정·검증·기존 스키마 채택 및 선박 연결은 [사용 안내 10절](docs/user-guide.md#10-해사-데이터-tool-선택), 호출 형식은 [API 명세](docs/specs/tools.md), 이번 변경 범위는 [ADR 0011 제안](docs/adr/0011-tools-runtime-and-data-preparation.md)을 보세요.
 
 ## 문서
 

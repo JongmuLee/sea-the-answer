@@ -178,6 +178,8 @@ def test_ship_update_rejects_a_version_changed_during_save():
     store.validate_ship = lambda payload: {"id": payload["id"], "name": "Test Ship"}
 
     def query(sql, _params=()):
+        if "FROM pg_attribute" in sql:
+            return {"ready": False}  # This version-conflict case has no maritime mapping.
         if sql.startswith("SELECT version FROM ships"):
             return {"version": 1}
         if sql.startswith("UPDATE ships"):

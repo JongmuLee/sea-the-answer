@@ -29,7 +29,7 @@ FROM base AS prod
 COPY pyproject.toml uv.lock .python-version ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-default-groups
 COPY api ./api
-COPY maritime_data ./maritime_data
+COPY tools ./tools
 COPY knowledge ./knowledge
 USER app
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

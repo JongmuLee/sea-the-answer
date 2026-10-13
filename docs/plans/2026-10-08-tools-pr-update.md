@@ -4,7 +4,7 @@
 - 작성: 역할4 · 2026-10-08
 - 담당: 역할4
 - 목표 일자: 2026-10-08
-- 관련: [PR #3](https://github.com/dudco/sea-the-answer/pull/3), [기존 구조 정리](2026-10-08-maritime-data-docs-alignment.md), [팀 PR #5](https://github.com/dudco/sea-the-answer/pull/5)
+- 관련: [PR #3](https://github.com/dudco/sea-the-answer/pull/3), [기존 구조 정리](2026-10-08-tools-and-data-preparation-docs.md), [팀 PR #5](https://github.com/dudco/sea-the-answer/pull/5)
 
 ## 1. 배경과 목표
 

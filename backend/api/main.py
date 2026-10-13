@@ -34,11 +34,11 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="SEA THE ANSWER API", version=config.VERSION, lifespan=lifespan)
 
-# Maritime data tool (backend/maritime_data, ADR 0008). Mounted only when its server-only
+# Maritime data tool (backend/tools). Mounted only when its server-only
 # bearer token is configured. Registered before the /api/{path} catch-all so it wins routing.
 maritime_engine = None
 if os.getenv("MARITIME_DATA_API_TOKEN"):
-    from maritime_data.api import create_engine_for, create_router
+    from tools.api import create_engine_for, create_router
 
     maritime_engine = create_engine_for(os.getenv("MARITIME_DATA_DATABASE_URL") or config.database_url())
     app.include_router(create_router(maritime_engine, os.environ["MARITIME_DATA_API_TOKEN"]))

@@ -1,6 +1,6 @@
 # 데이터 모델
 
-> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-13 (`migrations/`, `backend/api/store/`, `backend/maritime_data/schema/schema.sql` 대조)
+> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-13 (`migrations/`, `backend/api/store/`, `scripts/` 대조)
 > 테이블·필드·상태 값을 바꾸면 같은 작업에서 이 문서를 고치고, 되돌리기 어려운 변경이면 ADR을 남깁니다.
 
 ## 1. 저장소 개요
@@ -133,7 +133,7 @@ erDiagram
 
 - 대부분의 ID는 `randomUUID()`. 문서는 내용 해시 기반 개정 ID.
 - **낙관적 잠금**: `ships`, `operations`, `reports`, `users`는 `version` 정수를 갖고, 요청의 `version`이 DB와 다르면 `409 VERSION_CONFLICT`. 저장 시 +1. 문서는 `expectedId`(현재 개정 ID)와 `expectedMetaRevision`으로 같은 검사를 합니다.
-- 변경은 `BEGIN IMMEDIATE` 트랜잭션 하나로 처리(`workspace.transaction`).
+- 변경은 PostgreSQL 트랜잭션 하나로 처리하며 충돌 제어가 필요한 기존 행은 `FOR UPDATE`로 잠급니다.
 - 일반 사용자 소유자 ID: `guest_` + `haedap_guest` 쿠키 값의 SHA-256.
 
 ## 7. 백업 형식
@@ -156,6 +156,7 @@ erDiagram
 
 - 복구 조건: `format`·`version:2`·체크섬 일치, 16개 테이블 모두 존재, 활성 관리자 1명 이상. 복구 직전 자동 백업을 만들고 한 트랜잭션에서 전체 교체합니다.
 - `.env`(API 키)는 포함하지 않습니다.
+- `maritime_data`의 테이블·원본·CSV는 앱 JSON 백업에 포함하지 않습니다. 앱 복구는 외부 해사 레코드를 삭제하지 않으며, 복구 전 연결한 `vessels.ship_id`는 복구 후 동일한 선박 정체성이 확인되는 경우만 재연결합니다. 누락되거나 정체성이 다르면 NULL로 남기고 재연결·미연결 건수를 기록합니다. 전체 해사 데이터는 별도 PostgreSQL 백업이 필요합니다(9절).
 
 ## 8. 스키마를 바꿀 때
 
@@ -167,14 +168,15 @@ erDiagram
 
 ## 9. PostgreSQL 해사 데이터 Tool (선택)
 
-앱 테이블과 분리된 PostgreSQL `maritime_data` 스키마입니다. 앱 시작 시 생성되지 않으며, 별도 전처리·적재를 거친 자료만 조회합니다. 아래 여섯 테이블과 두 조회 View가 역할4 Tool의 저장 모델입니다. 실제 MRV와 Synthetic Noon의 구분·품질·단위 정책은 [데이터 명세](specs/maritime-data.md), 조회·계산 입력은 [API 명세](specs/maritime-data-api.md)에 정의합니다.
+앱과 같은 PostgreSQL DB 안의 `maritime_data` 스키마입니다. 루트 dbmate 마이그레이션이 구조를 만들고, 별도 전처리·CSV 적재를 거친 자료만 조회합니다. 아래 여섯 테이블과 두 조회 View가 역할4 Tool의 저장 모델입니다. 기존 `public.ships`는 선택적 외래키로 재사용하며 보고기간 MRV·합성 Noon·출처·품질은 독립적으로 보존합니다. 실제/합성·단위 정책은 [데이터 명세](specs/prepare-data.md), 조회·계산 입력은 [API 명세](specs/tools.md)에 정의합니다.
 
-구현 정의는 [`schema.sql`](../backend/maritime_data/schema/schema.sql)이며, 컬럼 원본은 `scripts/prepare_maritime_data.py`의 `FIELDS`와 `schema/dictionary.json`입니다. SQL의 NOT NULL·CHECK·외래키는 아래 표의 필드 규칙에 추가 적용됩니다. 앱 테이블을 이 구조로 교체하거나 두 데이터를 자동 결합하지 않습니다.
+DDL의 원본은 [`20261013010000_maritime_data.sql`](../migrations/20261013010000_maritime_data.sql)입니다. 데이터 필드 사전은 `scripts/prepare_maritime_data.py`의 `FIELDS`에서 생성하며, 사전 생성은 DDL을 만들거나 마이그레이션 파일을 덮어쓰지 않습니다. SQL의 NOT NULL·CHECK·외래키는 아래 표의 필드 규칙에 추가 적용됩니다. 앱 테이블을 이 구조로 교체하거나 두 데이터를 자동 결합하지 않습니다([ADR 0011 제안](adr/0011-tools-runtime-and-data-preparation.md)).
 
 ### ERD
 
 ```mermaid
 erDiagram
+  public_ships o|--o{ vessels : explicit_ship_id
   source_files ||--o{ annual_reports : provenance
   source_files ||--o{ synthetic_noon : provenance
   source_files ||--o{ quality_issues : records
@@ -211,6 +213,7 @@ erDiagram
 | data_origin | text | required | REAL or SYNTHETIC; never joined across origins |
 | imo_number | text | nullable | Seven-digit source IMO; synthetic remains NULL |
 | source_vessel_id | text | required | Original IMO or synthetic vessel ID |
+| ship_id | text | nullable FK public.ships(id), ON DELETE SET NULL | Explicitly reviewed app ship link; source vessel ID remains unchanged |
 
 #### annual_reports — 실제 MRV 보고기간 집계
 
@@ -299,10 +302,16 @@ erDiagram
 - 연간·일별 레코드의 품질 값은 VALID/REVIEW/REJECT로 제한하며 선박 ID 접두어를 검사합니다.
 - MRV의 보고 유형은 FULL/PARTIAL/ARCHIVE_ANNUAL이며 집계 적격이면 VALID 및 비PARTIAL이어야 합니다. 기간 경계가 모두 있으면 종료 ≥ 시작입니다.
 - Noon은 DWT > 0, 거리·연료·속도 ≥ 0, 기관 운전시간 0~24시간, 종료시각 > 시작시각 및 최대 24시간을 검사합니다.
-- 모든 실제 외래키는 `ON DELETE RESTRICT`입니다. 원본·품질 레코드를 연쇄 삭제하지 않습니다.
+- 해사 데이터 내부 외래키는 `ON DELETE RESTRICT`입니다. 원본·품질 레코드를 연쇄 삭제하지 않습니다. 앱 선박 연결인 `vessels.ship_id`만 `ON DELETE SET NULL`이며 앱 선박이 없어져도 원본 해사 레코드는 보존합니다.
+- 선박 연결은 검토한 명시적 매핑만 허용합니다. 이름·IMO로 자동 조인하거나 원본 선박 전체를 `ships`에 생성하지 않습니다. MRV 보고기간 값을 앱 일별 `operations`로 분해하지 않습니다.
+- 명시 매핑 CLI는 실제 원본과 같은 IMO의 비샘플 앱 선박만 연결합니다. 합성은 확인 옵션과 sample 앱 선박이 필요합니다. 서로 다른 기존 연결 덮어쓰기·앱 선박 중복 연결은 거절하고 동일 연결은 멱등 처리합니다. 명령과 설정 우선순위는 [운영 안내](user-guide.md#기존-앱-선박에-명시적으로-연결하기)에 있습니다.
 
 ### 버전·적재·백업 경계
 
-DDL은 새 스키마 생성용이며 반복 적재 마이그레이션이 아닙니다. 적재 스크립트는 기존 스키마가 있으면 중단하고, 새 적재는 단일 트랜잭션 안에서 검증 후 커밋합니다. CSV·원본·출처 해시는 별도 데이터 버전으로 보존합니다. 이전 `role4` 스키마의 이름 변경 절차는 [운영 안내](user-guide.md#10-해사-데이터-tool-선택)에 있습니다.
+`20261013000000_init.sql`은 그대로 유지하고 새 해사 마이그레이션을 그 뒤에 적용합니다. 기본 앱과 같은 `DATABASE_URL`을 사용합니다. `MARITIME_DATA_DATABASE_URL`로 별도 DB를 선택해도 그 DB에 기본 init과 해사 마이그레이션을 모두 적용해야 하며, 외래키는 그 DB의 `public.ships`만 참조합니다.
 
-기본 앱의 JSON 백업에는 이 PostgreSQL 데이터와 원본 파일이 포함되지 않습니다. 별도로 PostgreSQL 백업과 원본·전처리 산출물을 보관해야 합니다. 공개 제원·환경성능 참조 자료는 별도 데이터 폴더에 관리하며, 현재 위 여섯 운영 테이블에 자동 적재하거나 공식 CII 입력으로 사용하지 않습니다.
+새 마이그레이션은 fresh DB에서는 빈 해사 테이블을 만듭니다. 이전 `role4` 또는 `maritime_data` 스키마가 하나만 있으면 기대 테이블·컬럼·구조를 검증한 뒤 채택하고, 양쪽이 함께 있거나 구조가 맞지 않으면 전체 변경을 거절합니다. 원본·운항 레코드는 재작성하지 않습니다. 해사 테이블에 데이터가 있으면 down을 거절하므로 일반 앱 rollback 명령으로 원본을 삭제하지 않습니다. 이름을 되돌려야 하는 기존 환경은 별도 보존·이전 계획이 필요합니다.
+
+CSV loader는 DDL을 실행하지 않습니다. 마이그레이션이 적용되어 있고 6개 대상 테이블이 모두 빈 경우에만 한 트랜잭션 안에서 검증 후 적재합니다. 하나라도 데이터가 있으면 삭제·재적재하지 않고 거절합니다. CSV·원본·출처 해시는 별도 데이터 버전으로 보존합니다. 실행 절차와 이전 환경의 설정 전환은 [운영 안내](user-guide.md#10-해사-데이터-tool-선택)에 있습니다.
+
+기본 앱의 JSON 백업에는 해사 테이블과 원본 파일이 포함되지 않습니다. 앱 복구는 현재 해사 선박 연결을 보관한 뒤 앱 선박을 교체하고, 동일한 정체성의 선박만 재연결합니다. 삭제·불일치 연결은 NULL로 두며 처리 건수를 복구 결과·감사에 남깁니다. 이 보존 절차는 과거 연결까지 복원하는 해사 백업을 대체하지 않습니다. 별도로 PostgreSQL 백업과 원본·전처리 산출물을 보관해야 합니다. 공개 제원·환경성능 참조 자료는 별도 데이터 폴더에 관리하며, 현재 위 여섯 운영 테이블에 자동 적재하거나 공식 CII 입력으로 사용하지 않습니다.

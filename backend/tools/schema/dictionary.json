@@ -94,6 +94,12 @@
         "text",
         "required",
         "Original IMO or synthetic vessel ID"
+      ],
+      [
+        "ship_id",
+        "text",
+        "nullable FK public.ships",
+        "Explicit app association; never inferred from names or reference candidates"
       ]
     ],
     "annual_reports": [

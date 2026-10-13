@@ -8,14 +8,14 @@ dependencies = [
     "uvicorn>=0.34,<1",
     "psycopg[binary]>=3.2,<4",
     "httpx>=0.28,<1",
-    # maritime_data
+    # tools
     "sqlalchemy>=2.0,<3",
     "python-dotenv>=1,<2",
 ]
 
 [dependency-groups]
 dev = ["pytest>=8,<10"]
-# Offline data preparation scripts in maritime_data/scripts (not needed at runtime).
+# Offline data preparation scripts in ../scripts (not needed at runtime).
 data = ["openpyxl==3.1.5", "pandas>=2.2,<3"]
 
 [tool.uv]
@@ -24,6 +24,6 @@ package = false
 default-groups = ["dev"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["tests", "maritime_data/tests"]
+pythonpath = [".", ".."]
+testpaths = ["tests", "../scripts"]
 addopts = "-p no:cacheprovider"
