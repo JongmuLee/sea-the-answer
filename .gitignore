@@ -12,10 +12,10 @@ data/
 *.log
 frontend/AGENTS.md
 frontend/CLAUDE.md
-
-# Python maritime tools
-.venv/
-__pycache__/
-.pytest_cache/
 *.pyc
 outputs/
+
+# e2e (Playwright)
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
