@@ -1,0 +1,67 @@
+# SEA THE ANSWER — run everything from the repository root.
+#
+#   docker compose up --build -d                       # app (production builds) → http://localhost:5173
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build   # development (hot reload)
+#
+# Settings come from the root .env (copy .env.example). See README.md.
+name: haedap
+
+x-database-env: &database-env
+  POSTGRES_DB: ${POSTGRES_DB:-haedap}
+  POSTGRES_USER: ${POSTGRES_USER:-haedap}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-haedap-local}
+
+x-db: &db
+  image: postgres:18-alpine
+  environment: *database-env
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+
+x-backend-env: &backend-env
+  # Optional: grounded model responses (server-side only).
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-}
+  # Optional: mounts /api/maritime-data/* (ADR 0008). Empty = disabled.
+  MARITIME_DATA_API_TOKEN: ${MARITIME_DATA_API_TOKEN:-}
+  MARITIME_DATA_DATABASE_URL: ${MARITIME_DATA_DATABASE_URL:-}
+
+services:
+  db:
+    <<: *db
+    volumes:
+      - db-data:/var/lib/postgresql
+      # Applied only when the volume is empty (first start).
+      - ./backend/pyapi/schema.sql:/docker-entrypoint-initdb.d/01-workspace.sql:ro
+    restart: unless-stopped
+
+  backend:
+    build: { context: ./backend, target: prod }
+    environment:
+      <<: *backend-env
+      DATABASE_URL: postgresql://${POSTGRES_USER:-haedap}:${POSTGRES_PASSWORD:-haedap-local}@db:5432/${POSTGRES_DB:-haedap}
+      # Extra public hostnames/IPs users open (LAN, server domain). localhost is always allowed.
+      HAEDAP_ALLOWED_HOSTS: ${HAEDAP_ALLOWED_HOSTS:-}
+    volumes:
+      - backups:/data/backups
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+    # Not published: only reachable through the frontend's /api proxy.
+
+  frontend:
+    build: { context: ./frontend, target: prod }
+    environment:
+      HAEDAP_API_ORIGIN: http://backend:8000
+    ports:
+      # HAEDAP_BIND=0.0.0.0 to accept LAN/server traffic.
+      - "${HAEDAP_BIND:-127.0.0.1}:${PORT:-5173}:5173"
+    depends_on:
+      backend: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  backups:

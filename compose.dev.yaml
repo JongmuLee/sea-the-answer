@@ -1,0 +1,27 @@
+# Development override: source is bind-mounted and reloads on save.
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build
+# Dependencies live in the images; rebuild (--build) after changing
+# backend/pyproject.toml·uv.lock or frontend/package.json·package-lock.json.
+services:
+  db:
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"   # psql / DB tools from the host
+
+  backend:
+    build: { context: ./backend, target: dev }
+    volumes:
+      - ./backend:/app
+      - backups:/data/backups
+    ports:
+      - "127.0.0.1:8000:8000"   # direct API access (http://127.0.0.1:8000/docs)
+
+  frontend:
+    build: { context: ./frontend, target: dev }
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules     # keep the image's Linux node_modules
+      - /app/.next-dev
+    environment:
+      # Uncomment if saves are not picked up (some Windows/WSL setups).
+      # WATCHPACK_POLLING: "true"
+      HAEDAP_API_ORIGIN: http://backend:8000
