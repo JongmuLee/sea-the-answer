@@ -1,6 +1,6 @@
 # 데이터 모델
 
-> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-13 (`migrations/`, `backend/pyapi/workspace_store.py`, `backend/maritime_data/schema/schema.sql` 대조)
+> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-13 (`migrations/`, `backend/api/store/`, `backend/maritime_data/schema/schema.sql` 대조)
 > 테이블·필드·상태 값을 바꾸면 같은 작업에서 이 문서를 고치고, 되돌리기 어려운 변경이면 ADR을 남깁니다.
 
 ## 1. 저장소 개요

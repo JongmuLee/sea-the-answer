@@ -34,7 +34,7 @@ sea-the-answer/
 │  └─ tests/             단위 테스트 (npm test)
 ├─ backend/              FastAPI + PostgreSQL                                       [uv]
 │  ├─ pyproject.toml, uv.lock, .python-version, Dockerfile
-│  ├─ pyapi/             workspace_api.py(라우팅·인증), workspace_store.py(DB·업무 로직)
+│  ├─ api/               FastAPI 앱 — main.py(진입점), web/(보안·동시성), routes/(도메인별 경로), store/(DB·업무 로직)
 │  ├─ maritime_data/     (선택) 해사 데이터 조회·계산 Tool, 전처리 스크립트
 │  ├─ knowledge/         seed.json(기본 문서), sample-data.json(가상 운항 예시)
 │  └─ tests/             pytest
@@ -96,7 +96,7 @@ npx --yes dbmate@2.36.0 -d migrations --no-dump-schema up
 # 터미널 1 — backend (Python 3.13, uv 필요: https://docs.astral.sh/uv/)
 cd backend
 uv sync
-uv run --env-file ../.env uvicorn pyapi.workspace_api:app --reload
+uv run --env-file ../.env uvicorn api.main:app --reload
 
 # 터미널 2 — frontend (Node.js 24 + npm)
 cd frontend

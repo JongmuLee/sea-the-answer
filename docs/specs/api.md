@@ -1,7 +1,7 @@
 # HTTP API
 
 - 상태: 구현됨 (1.4.0)
-- 최종 확인: 2026-10-13 (`backend/pyapi/workspace_api.py` 대조)
+- 최종 확인: 2026-10-13 (`backend/api/` 대조)
 - 관련: [`../architecture.md`](../architecture.md), [`../data-model.md`](../data-model.md), [`integrated-answer.md`](integrated-answer.md), [ADR 0004](../adr/0004-public-access-admin-only-writes.md)
 
 ## 1. 목적

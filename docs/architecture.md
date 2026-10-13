@@ -14,7 +14,7 @@ flowchart LR
   B[브라우저<br/>React UI] -->|HTTP :5173| N
   subgraph C[docker compose · 프로젝트 haedap]
     N[frontend<br/>Next.js :5173<br/>유일하게 공개되는 포트]
-    G[backend<br/>FastAPI :8000<br/>pyapi.workspace_api]
+    G[backend<br/>FastAPI :8000<br/>api.main:app]
     D[(db<br/>PostgreSQL 18<br/>볼륨 db-data)]
     M[migrate<br/>dbmate · migrations/<br/>시작 때 1회]
     K[/백업 파일<br/>볼륨 backups/]
@@ -43,7 +43,7 @@ flowchart LR
 
 ## 2. 요청 흐름
 
-### 2.1 Next.js → FastAPI (`frontend/src/proxy.js`, `backend/pyapi/workspace_api.py`)
+### 2.1 Next.js → FastAPI (`frontend/src/proxy.js`, `backend/api/web/handler.py`)
 
 1. 브라우저 요청은 모두 Next.js가 받습니다. 화면·`/_next/*`·`frontend/public` 리소스는 Next.js가 직접 응답합니다.
 2. `/api/:path*`는 `proxy.js`(Next.js 16의 `middleware` 후속, Node.js 런타임)가 `NextResponse.rewrite`로 `HAEDAP_API_ORIGIN/api/:path*`에 프록시합니다. 원래 `Host`는 `X-Forwarded-Host`에 들어갑니다. 쿠키·`Set-Cookie`는 그대로 오갑니다.
@@ -67,7 +67,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant UI as 브라우저
-  participant API as workspace_api.post_route
+  participant API as routes/documents.ask
   participant WS as Workspace.answer
   participant DB as PostgreSQL
   UI->>API: question, task, context{ship,from,to}, criterion
@@ -91,8 +91,15 @@ sequenceDiagram
 
 | 경로 | 책임 |
 |---|---|
-| `pyapi/workspace_api.py` | FastAPI 앱, `/api/{path}` 라우팅, 세션·게스트 쿠키, CSRF, Host·Origin 검사, 본문 크기 제한, 동시성·복구 잠금, 자동 백업 루프, 오류 응답, 해사 데이터 라우터 마운트 |
-| `pyapi/workspace_store.py` | `Workspace`: PostgreSQL 접근, 인증, 권한, 문서 등록·청크(900자)·검색, 선박·운항 변경, 보고서·초안 생성, 계산 도구, 통합 답변·선택적 LLM, 감사 로그, 백업·복구 |
+| `api/main.py` | FastAPI 앱 생성, lifespan(자동 백업 루프), 해사 데이터 라우터 마운트, 오류 응답 형식 |
+| `api/web/handler.py` | `/api/{path}` 진입점: 요청 슬롯, Content-Type·본문 크기, DB 세션, 인증·CSRF 후 `routes.dispatch` |
+| `api/web/security.py` | Host·Origin 검사, 게스트 쿠키, 관리자 세션(메모리), CSRF 토큰, 로그인 시도 기록 |
+| `api/web/concurrency.py` | 동시 요청 4개 제한, 복구 단독 실행(프로세스 카운터 + PostgreSQL advisory lock) |
+| `api/web/backup_job.py` | 1분마다 확인하는 하루 1회 자동 백업 |
+| `api/routes/` | 경로 표와 도메인별 핸들러: `system`(health·tools), `auth`, `documents`(문서·PDF·ask·search·history), `operations`, `changes`, `reports`, `admin`(users·logs·backups) |
+| `api/store/` | `Workspace` = `base.Database`(연결·트랜잭션) + 도메인 mixin: `users`, `documents`(청크 900자·검색), `operations`, `changes`, `reports`, `answers`(통합 답변·선택적 LLM), `tools`, `backups` |
+| `api/config.py`, `api/deps.py` | 환경 설정(DB 주소, 백업 경로, 허용 호스트), `Workspace` 열기와 최초 1회 초기화 |
+| `api/errors.py`, `api/validation.py` | `ApiError`·`require`, 입력 검증·형식 도우미 |
 | `knowledge/seed.json`, `knowledge/sample-data.json` | 기본 문서, "예시 데이터 넣기"용 가상 운항 기록 |
 | `maritime_data/` | 해사 데이터 조회·계산 Tool(8절). `scripts/`는 오프라인 전처리(`uv sync --group data`) |
 | `tests/`, `maritime_data/tests/` | pytest (`backend/`에서 `uv run pytest`) |
@@ -120,11 +127,11 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 
 | 바꾸려는 것 | 시작 위치 | 지켜야 할 계약 |
 |---|---|---|
-| 검색(벡터·하이브리드 RAG) | `Workspace.search`, `save_document`의 청크 분할 | 열람 범위 필터 유지, evidence 필드 형식 |
-| 답변 생성(LLM 공급자) | `Workspace.grounded_statements`, `answer`의 `mode=llm` 분기 | statements의 `chunkId`·`quote` 인용 검증 |
-| 의도 분류·Agent | `Workspace.answer` | [`specs/integrated-answer.md`](specs/integrated-answer.md) 출력 형식 |
-| 계산 Tool 추가 | `workspace_api.get_route("tools")`, `post_route("tools/…")`, `Workspace.calculate_emissions` | 입력 검증, `version`·`assumptions` 반환, `tool_runs` 기록 |
-| 보고서 서식 | `Workspace.generate_report` | 없는 값은 `[미입력 · 확인 필요]` |
+| 검색(벡터·하이브리드 RAG) | `api/store/documents.py`의 `search`, `save_document`의 청크 분할 | 열람 범위 필터 유지, evidence 필드 형식 |
+| 답변 생성(LLM 공급자) | `api/store/answers.py`의 `grounded_statements`, `answer`의 `mode=llm` 분기 | statements의 `chunkId`·`quote` 인용 검증 |
+| 의도 분류·Agent | `api/store/answers.py`의 `answer` | [`specs/integrated-answer.md`](specs/integrated-answer.md) 출력 형식 |
+| 계산 Tool 추가 | `api/store/tools.py`(`TOOL_DEFINITIONS`, 계산 메서드), `api/routes/system.py`(경로) | 입력 검증, `version`·`assumptions` 반환, `tool_runs` 기록 |
+| 보고서 서식 | `api/store/reports.py`의 `generate_report` | 없는 값은 `[미입력 · 확인 필요]` |
 | 새 서비스(로컬 LLM, 벡터 DB 등) | `compose.yaml`에 서비스 추가, backend 환경변수로 주소 전달 | 공개 포트는 frontend 하나 유지 |
 
 연결 순서와 담당은 [`plans/2026-10-08-team-module-integration.md`](plans/2026-10-08-team-module-integration.md)를 참고하세요.
