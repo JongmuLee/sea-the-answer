@@ -118,7 +118,7 @@ class Workspace:
         try:
             self.one("SELECT 1 FROM settings LIMIT 1")
         except psycopg.Error as exc:
-            raise ApiError(503, "SCHEMA_NOT_READY", "PostgreSQL에 pyapi/schema.sql을 적용해 주세요.") from exc
+            raise ApiError(503, "SCHEMA_NOT_READY", "DB 마이그레이션이 적용되지 않았습니다. migrations/를 dbmate로 적용해 주세요.") from exc
         self.run("INSERT INTO settings(key,value) VALUES('autoBackup','daily') ON CONFLICT(key) DO NOTHING")
         if not self.one("SELECT 1 FROM users WHERE username='admin'"):
             salt = uuid4().hex

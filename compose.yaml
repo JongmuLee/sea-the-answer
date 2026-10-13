@@ -1,6 +1,7 @@
 # SEA THE ANSWER — run everything from the repository root.
 #
 #   docker compose up --build -d                       # app (production builds) → http://localhost:5173
+#   docker compose run --rm migrate new <name>          # new migration file in migrations/
 #   docker compose -f compose.yaml -f compose.dev.yaml up --build   # development (hot reload)
 #   docker compose --profile e2e up --build --exit-code-from e2e e2e  # end-to-end tests, isolated DB
 #
@@ -21,6 +22,18 @@ x-db: &db
     timeout: 3s
     retries: 30
 
+# DB migrations (migrations/, dbmate — ADR 0010). Runs once and exits; backend waits for it.
+x-migrate: &migrate
+  image: amacneil/dbmate:2.36.0
+  environment: &migrate-env
+    DBMATE_MIGRATIONS_DIR: /db/migrations
+    DBMATE_NO_DUMP_SCHEMA: "true"
+    DBMATE_WAIT: "true"
+  volumes:
+    - ./migrations:/db/migrations
+  command: ["up"]
+  restart: "no"
+
 x-backend-env: &backend-env
   # Optional: grounded model responses (server-side only).
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -34,9 +47,17 @@ services:
     <<: *db
     volumes:
       - db-data:/var/lib/postgresql
-      # Applied only when the volume is empty (first start).
-      - ./backend/pyapi/schema.sql:/docker-entrypoint-initdb.d/01-workspace.sql:ro
     restart: unless-stopped
+
+  # Applies pending migrations on every `up`, then exits.
+  # New migration: docker compose run --rm migrate new <name>   (see README)
+  migrate:
+    <<: *migrate
+    environment:
+      <<: *migrate-env
+      DATABASE_URL: postgres://${POSTGRES_USER:-haedap}:${POSTGRES_PASSWORD:-haedap-local}@db:5432/${POSTGRES_DB:-haedap}?sslmode=disable
+    depends_on:
+      db: { condition: service_healthy }
 
   backend:
     build: { context: ./backend, target: prod }
@@ -48,7 +69,7 @@ services:
     volumes:
       - backups:/data/backups
     depends_on:
-      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     restart: unless-stopped
     # Not published: only reachable through the frontend's /api proxy.
 
@@ -70,8 +91,15 @@ services:
     <<: *db
     profiles: [e2e]
     tmpfs: [/var/lib/postgresql]
-    volumes:
-      - ./backend/pyapi/schema.sql:/docker-entrypoint-initdb.d/01-workspace.sql:ro
+
+  e2e-migrate:
+    <<: *migrate
+    profiles: [e2e]
+    environment:
+      <<: *migrate-env
+      DATABASE_URL: postgres://${POSTGRES_USER:-haedap}:${POSTGRES_PASSWORD:-haedap-local}@e2e-db:5432/${POSTGRES_DB:-haedap}?sslmode=disable
+    depends_on:
+      e2e-db: { condition: service_healthy }
 
   e2e-backend:
     build: { context: ./backend, target: prod }
@@ -83,7 +111,7 @@ services:
       OPENAI_MODEL: ""
     tmpfs: ["/data/backups:uid=10001,gid=10001"]
     depends_on:
-      e2e-db: { condition: service_healthy }
+      e2e-migrate: { condition: service_completed_successfully }
 
   e2e-frontend:
     build: { context: ./frontend, target: prod }
