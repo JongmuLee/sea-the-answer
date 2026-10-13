@@ -7,7 +7,9 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from backend.pyapi.workspace_store import Workspace
+from api import deps
+from api.store import Workspace
+from api.web import security
 
 
 @contextmanager
@@ -17,7 +19,11 @@ def isolated_workspace(dsn):
             schema = "rag_test_" + uuid4().hex
             connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
             connection.execute(sql.SQL("SET LOCAL search_path TO {}").format(sql.Identifier(schema)))
-            connection.execute((Path(__file__).parents[1] / "pyapi/schema.sql").read_text(encoding="utf-8"))
+            migration = Path(__file__).resolve().parents[2] / "migrations/20261013000000_init.sql"
+            # Only the app migration's up section, scoped to this temporary
+            # schema. Never run down or the public maritime migration here.
+            app_sql = migration.read_text(encoding="utf-8").split("-- migrate:up", 1)[1].split("-- migrate:down", 1)[0]
+            connection.execute(app_sql)
             store = object.__new__(Workspace)
             store.db, store.dsn = connection, dsn
             store.bootstrap()
@@ -39,12 +45,12 @@ def isolated_workspace(dsn):
             yield store, RequestWorkspace
 
 
-def configure_api(monkeypatch, api, request_workspace):
-    monkeypatch.setattr(api, "Workspace", request_workspace)
+def configure_api(monkeypatch, request_workspace):
+    monkeypatch.setattr(deps, "Workspace", request_workspace)
     # bootstrap above already ran inside the rollback-only transaction.
-    monkeypatch.setattr(api, "initialized", True)
-    monkeypatch.setattr(api, "sessions", {})
-    monkeypatch.setattr(api, "login_attempts", {})
+    monkeypatch.setattr(deps, "initialized", True)
+    monkeypatch.setattr(security, "sessions", {})
+    monkeypatch.setattr(security, "login_attempts", {})
 
 
 def login(client):

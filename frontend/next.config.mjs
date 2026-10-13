@@ -6,7 +6,8 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
 
 // Next.js is the public entry point. `/api/*` is proxied to the internal API
 // server by src/proxy.js at request time (docs/adr/0006, 0007).
-// Only HAEDAP_API_ORIGIN is read from the project-root .env (no secrets enter Next.js).
+// Only HAEDAP_API_ORIGIN is read from the repository-root .env (no secrets enter Next.js).
+// In Docker the variable comes from compose instead, and this file is simply absent.
 function rootEnv(name) {
   try {
     return parseEnv(readFileSync(new URL('../.env', import.meta.url), 'utf8'))[name];
@@ -32,7 +33,9 @@ export default function config(phase) {
     reactStrictMode: true,
     devIndicators: { position: 'bottom-right' },
     poweredByHeader: false,
-    outputFileTracingRoot: fileURLToPath(new URL('../', import.meta.url)),
+    // frontend/ is a self-contained npm project; `standalone` output is what the Docker image runs.
+    outputFileTracingRoot: fileURLToPath(new URL('./', import.meta.url)),
+    output: 'standalone',
     // Development and production builds use separate output folders.
     distDir: process.env.HAEDAP_NEXT_DIST || (dev ? '.next-dev' : '.next'),
     ...(dev ? { allowedDevOrigins: lanHosts() } : {}),

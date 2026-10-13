@@ -7,6 +7,7 @@ import { createViews } from '../views';
 import { btn, badge, notice, empty, dateText, n, download, options } from '../components/common';
 import { extractPdf, textToSections } from '../lib/pdf';
 import { parseCsv, toCsv } from '../lib/csv';
+import { uuid } from '../lib/id';
 export function createWorkspace() {
   const model = createModel(),
     api = createApiClient(),
@@ -802,7 +803,7 @@ export function createWorkspace() {
     if (uploadError)
       throw Error('PDF를 다시 선택하거나 선택을 해제한 뒤 본문을 입력해 주세요. ' + uploadError);
     const doc = {
-      id: editing?.logical_id || 'doc-' + crypto.randomUUID(),
+      id: editing?.logical_id || 'doc-' + uuid(),
       title: v.title,
       version: v.version,
       kind: v.kind,

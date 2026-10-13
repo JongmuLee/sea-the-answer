@@ -5,8 +5,8 @@ from copy import deepcopy
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.pyapi import workspace_api
-from backend.tests.rag_postgres_support import configure_api, isolated_workspace, login
+from api import main
+from rag_postgres_support import configure_api, isolated_workspace, login
 
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def database(monkeypatch):
     if not dsn:
         pytest.skip("HAEDAP_TEST_DATABASE_URL not configured")
     with isolated_workspace(dsn) as (store, request_workspace):
-        configure_api(monkeypatch, workspace_api, request_workspace)
+        configure_api(monkeypatch, request_workspace)
         yield store
 
 
@@ -33,8 +33,8 @@ def post(client, headers, data):
 
 
 def test_real_document_upload_search_revision_access_and_rollback(database):
-    client = TestClient(workspace_api.app, base_url="http://localhost:5173")
-    guest = TestClient(workspace_api.app, base_url="http://localhost:5173")
+    client = TestClient(main.app, base_url="http://localhost:5173")
+    guest = TestClient(main.app, base_url="http://localhost:5173")
     guest_headers = {"X-Haedap-Token": guest.get("/api/health").json()["csrfToken"]}
     assert post(guest, guest_headers, payload()).status_code == 403
     headers = login(client)

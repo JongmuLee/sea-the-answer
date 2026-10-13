@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.pyapi import workspace_api
-from backend.pyapi.workspace_store import ApiError, Workspace
-from backend.pyapi.workspace_store import BACKUP_TABLES
-from backend.pyapi.migrate_sqlite import migrate
+from api import config, deps, main
+from api.errors import ApiError
+from api.store import Workspace
+from api.web import backup_job, concurrency, security
 
 
 ADMIN = {"id": "admin-1", "username": "admin", "name": "관리자", "role": "admin", "active": True, "version": 1}
@@ -43,8 +42,6 @@ class FakeWorkspace:
         return ADMIN if user_id == ADMIN["id"] else None
 
     def authenticate(self, username, password):
-        from backend.pyapi.workspace_store import ApiError
-
         if username != "admin" or password != "1234":
             raise ApiError(401, "LOGIN_FAILED", "아이디 또는 비밀번호가 올바르지 않습니다.")
         return ADMIN
@@ -58,10 +55,10 @@ class FakeWorkspace:
 
 
 def test_browser_health_auth_and_question_contract(monkeypatch):
-    monkeypatch.setattr(workspace_api, "Workspace", FakeWorkspace)
-    monkeypatch.setattr(workspace_api, "initialized", False)
-    workspace_api.sessions.clear()
-    client = TestClient(workspace_api.app, base_url="http://localhost:5173")
+    monkeypatch.setattr(deps, "Workspace", FakeWorkspace)
+    monkeypatch.setattr(deps, "initialized", False)
+    security.sessions.clear()
+    client = TestClient(main.app, base_url="http://localhost:5173")
     health = client.get("/api/health")
     assert health.status_code == 200
     assert health.json()["storage"] == "postgresql"
@@ -86,9 +83,9 @@ def test_browser_health_auth_and_question_contract(monkeypatch):
 
 
 def test_request_origin_and_json_errors(monkeypatch):
-    monkeypatch.setattr(workspace_api, "Workspace", FakeWorkspace)
-    monkeypatch.setattr(workspace_api, "initialized", False)
-    client = TestClient(workspace_api.app, base_url="http://localhost:5173")
+    monkeypatch.setattr(deps, "Workspace", FakeWorkspace)
+    monkeypatch.setattr(deps, "initialized", False)
+    client = TestClient(main.app, base_url="http://localhost:5173")
     token = client.get("/api/health").json()["csrfToken"]
     wrong_origin = client.post("/api/ask", headers={"X-Haedap-Token": token, "Origin": "https://other.example"},
                                json={"question": "규정"})
@@ -103,26 +100,26 @@ def test_request_origin_and_json_errors(monkeypatch):
 
 
 def test_restore_requires_exclusive_request_slot():
-    workspace_api.reserve_request("health")
+    concurrency.reserve_request("health")
     try:
         with pytest.raises(ApiError) as error:
-            workspace_api.reserve_request("backups/restore")
+            concurrency.reserve_request("backups/restore")
         assert error.value.status == 409
     finally:
-        workspace_api.release_request("health")
-    workspace_api.reserve_request("backups/restore")
+        concurrency.release_request("health")
+    concurrency.reserve_request("backups/restore")
     try:
         with pytest.raises(ApiError) as error:
-            workspace_api.reserve_request("health")
+            concurrency.reserve_request("health")
         assert error.value.status == 409
     finally:
-        workspace_api.release_request("backups/restore")
+        concurrency.release_request("backups/restore")
 
 
 def test_restore_rejects_database_lock_held_by_another_worker():
     db = SimpleNamespace(one=lambda _sql, _params: {"locked": False})
     with pytest.raises(ApiError) as error:
-        workspace_api.database_request_lock(db, exclusive=True)
+        concurrency.database_request_lock(db, exclusive=True)
     assert error.value.status == 409
     assert error.value.code == "BUSY"
 
@@ -151,16 +148,16 @@ def test_automatic_backup_runs_once_per_utc_day(monkeypatch, tmp_path):
         def create_backup(self, _admin, _directory, _label):
             calls.append("backup")
 
-    monkeypatch.setattr(workspace_api, "Workspace", BackupWorkspace)
-    monkeypatch.setattr(workspace_api, "initialized", True)
-    monkeypatch.setattr(workspace_api, "backup_directory", lambda: tmp_path)
-    workspace_api.automatic_backup_once()
-    workspace_api.automatic_backup_once()
+    monkeypatch.setattr(deps, "Workspace", BackupWorkspace)
+    monkeypatch.setattr(deps, "initialized", True)
+    monkeypatch.setattr(config, "backup_directory", lambda: tmp_path)
+    backup_job.automatic_backup_once()
+    backup_job.automatic_backup_once()
     assert calls == ["backup"]
     assert state["autoBackupDay"] == today
     state["autoBackup"] = "off"
     state["autoBackupDay"] = ""
-    workspace_api.automatic_backup_once()
+    backup_job.automatic_backup_once()
     assert calls == ["backup"]
 
 
@@ -181,6 +178,8 @@ def test_ship_update_rejects_a_version_changed_during_save():
     store.validate_ship = lambda payload: {"id": payload["id"], "name": "Test Ship"}
 
     def query(sql, _params=()):
+        if "FROM pg_attribute" in sql:
+            return {"ready": False}  # This version-conflict case has no maritime mapping.
         if sql.startswith("SELECT version FROM ships"):
             return {"version": 1}
         if sql.startswith("UPDATE ships"):
@@ -208,16 +207,3 @@ def test_postgresql_operation_summary_and_calculation_formulas():
     calculation = store.calculate_emissions({"fuel": 10, "factor": 3, "dwt": 50000, "distance": 100})
     assert calculation["emission"] == 30
     assert calculation["intensity"] == 6
-
-
-def test_sqlite_migration_preview_is_read_only(tmp_path):
-    path = tmp_path / "old.sqlite"
-    with sqlite3.connect(path) as source:
-        for table in BACKUP_TABLES:
-            source.execute(f"CREATE TABLE {table}(id TEXT)")
-        source.execute("INSERT INTO documents VALUES('old-doc')")
-    counts = migrate(path, "postgresql://not-used-in-preview", apply=False)
-    assert counts["documents"] == 1
-    assert counts["operations"] == 0
-    with sqlite3.connect(path) as source:
-        assert source.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 1

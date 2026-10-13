@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from backend.rag_preprocessing import preprocess_sections
+from api.rag_preprocessing import preprocess_sections
 
 
 def section(text, page=7, heading="페이지 7"):

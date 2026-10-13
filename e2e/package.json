@@ -1,0 +1,14 @@
+{
+  "name": "sea-the-answer-e2e",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end browser tests against a running stack (default http://127.0.0.1:5173).",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}
