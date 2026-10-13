@@ -42,8 +42,11 @@
 | [`plans/2026-10-08-tools-and-data-preparation-docs.md`](plans/2026-10-08-tools-and-data-preparation-docs.md) — 역할4 PR 문서·모듈 구조 정리 | 완료 |
 | [`plans/2026-10-08-tools-pr-update.md`](plans/2026-10-08-tools-pr-update.md) — 역할4 PR 최신 main 반영 및 제출 | 완료 |
 | [`plans/2026-10-13-tools-and-data-preparation-integration.md`](plans/2026-10-13-tools-and-data-preparation-integration.md) — 해사 runtime·준비 작업·마이그레이션·선박 연결 통합 | 완료 |
+| [`plans/2026-10-13-mrv-reference-intensity.md`](plans/2026-10-13-mrv-reference-intensity.md) — 공개 DWT 후보 연결·MRV 참고 집약도 | 완료 (로컬·미제출) |
 
 ### adr — 설계 결정
+
+추가 제안: [0013 - 제원 후보 별도 보존·MRV 참고 집약도 API](adr/0013-mrv-reference-intensity.md). 팀 PR #11에서 사용하는 0012와 번호를 구분합니다.
 
 | 번호 | 결정 | 상태 |
 |---|---|---|

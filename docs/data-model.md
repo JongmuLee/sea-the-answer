@@ -168,7 +168,7 @@ erDiagram
 
 ## 9. PostgreSQL 해사 데이터 Tool (선택)
 
-앱과 같은 PostgreSQL DB 안의 `maritime_data` 스키마입니다. 루트 dbmate 마이그레이션이 구조를 만들고, 별도 전처리·CSV 적재를 거친 자료만 조회합니다. 아래 여섯 테이블과 두 조회 View가 역할4 Tool의 저장 모델입니다. 기존 `public.ships`는 선택적 외래키로 재사용하며 보고기간 MRV·합성 Noon·출처·품질은 독립적으로 보존합니다. 실제/합성·단위 정책은 [데이터 명세](specs/prepare-data.md), 조회·계산 입력은 [API 명세](specs/tools.md)에 정의합니다.
+앱과 같은 PostgreSQL DB 안의 `maritime_data` 스키마입니다. 루트 dbmate 마이그레이션이 구조를 만들고, 별도 전처리·CSV 적재를 거친 자료만 조회합니다. 아래 여섯 원본·출처·품질 테이블과 두 조회 View가 기본 저장 모델이며, 별도 제원 후보 참조 테이블 하나를 추가합니다. 기존 `public.ships`는 선택적 외래키로 재사용하며 보고기간 MRV·합성 Noon·출처·품질은 독립적으로 보존합니다. 실제/합성·단위 정책은 [데이터 명세](specs/prepare-data.md), 조회·계산 입력은 [API 명세](specs/tools.md)에 정의합니다.
 
 DDL의 원본은 [`20261013010000_maritime_data.sql`](../migrations/20261013010000_maritime_data.sql)입니다. 데이터 필드 사전은 `scripts/prepare_maritime_data.py`의 `FIELDS`에서 생성하며, 사전 생성은 DDL을 만들거나 마이그레이션 파일을 덮어쓰지 않습니다. SQL의 NOT NULL·CHECK·외래키는 아래 표의 필드 규칙에 추가 적용됩니다. 앱 테이블을 이 구조로 교체하거나 두 데이터를 자동 결합하지 않습니다([ADR 0011 제안](adr/0011-tools-runtime-and-data-preparation.md)).
 
@@ -183,6 +183,7 @@ erDiagram
   vessels ||--o{ annual_reports : real
   vessels ||--o{ synthetic_voyages : synthetic
   vessels ||--o{ synthetic_noon : synthetic
+  vessels ||--o| capacity_candidates : reference_only
   synthetic_voyages ||--o{ synthetic_noon : contains
 ```
 
@@ -292,6 +293,21 @@ erDiagram
 | detail | text | required | Evidence without replacing original value |
 
 ### 조회 View와 추가 제약
+
+#### capacity_candidates - 별도 공개 제원 후보
+
+추가 DDL 원본은 [`20261013020000_capacity_candidates.sql`](../migrations/20261013020000_capacity_candidates.sql)이다. 기존 여섯 운영·출처·품질 테이블과 두 View를 바꾸지 않고 참조 테이블 하나를 더한다.
+
+| 컬럼 | 타입·제약 | 의미 |
+|---|---|---|
+| vessel_id / imo_number | PK·vessels FK / 7자리, REAL:IMO와 일치 | 이름 대신 원본 IMO로 연결 |
+| candidate_dwt_t | nullable numeric, 양수·1천만 미만 | 원본 MRV DWT와 구분한 미검증 후보 t |
+| capacity_status | 정해진 상태 5종 | 미확보·단일 출처·5% 이내 일치·5% 초과 충돌 |
+| source_file_sha256 / source_filename / source_row | SHA256 / text / 2 이상 정수 | 실제 적재한 CSV 바이트와 논리 레코드 위치 |
+| source_json | required JSONB object | 출처별 DWT·GT·URL·제원·제한 등 CSV 원문 필드 |
+| loaded_at | timestamptz, 기본 now() | 적재 시각이며 선박 제원의 기준연도가 아님 |
+
+CLI는 REAL 선박·IMO, 출처별 DWT·선택값·충돌 상태를 검증하고 빈 참조 테이블에만 적재한다. 원본 annual_reports.dwt_t·vessels·앱 ships는 수정하지 않는다. 데이터가 있으면 migration down을 거절한다. 앱 JSON 백업은 기존 16개 테이블로 유지하며 참조 테이블·CSV는 PostgreSQL 및 파일 백업으로 보관한다. 과거 보고연도 당시 제원 검증이나 공식 입력 승격은 제공하지 않는다. 새 참조 버전 교체는 별도 검토가 필요하다.
 
 | 객체 | 정의·목적 |
 |---|---|

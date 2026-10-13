@@ -160,6 +160,8 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 
 ## 8. 해사 데이터 Tool의 경계 (선택)
 
+공개 제원 후보는 추가 migration의 `capacity_candidates`에 원본과 별도 보존한다. 참고 전용 `/api/maritime-data/reference-intensity`는 승인 MRV 보고와 후보를 같은 읽기 전용 스냅샷에서 연결하며, 미검증 범위 수용 입력·출처·경고·차단 사유를 유지한다. 원본 CO₂·DWT·거리나 기존 calculate 계약은 변경하지 않고, 공식 CII·등급은 산출하지 않는다. 참조 CSV 적재는 `scripts/load_capacity_candidates.py`가 담당하며 화면·LLM·사용자별 어댑터 연결은 후속 범위다.
+
 `backend/tools/`는 PostgreSQL `maritime_data` 스키마의 승인 View를 읽기 전용으로 조회·계산합니다. backend와 같은 uv 프로젝트이며, `MARITIME_DATA_API_TOKEN`(32자 이상)을 설정하면 같은 FastAPI 프로세스에 `/api/maritime-data/*`로 마운트됩니다. 설정하지 않으면 라우트가 없습니다. 기본은 앱의 `DATABASE_URL`이며 `MARITIME_DATA_DATABASE_URL`로 별도 DB를 선택할 수 있습니다. 별도 DB에도 기본 init과 해사 마이그레이션을 모두 적용해야 하며 선박 외래키는 그 DB 안의 `public.ships`만 참조합니다.
 
 ```mermaid
