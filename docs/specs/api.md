@@ -126,6 +126,8 @@ CLI 일괄 수집 명령은 제거되었습니다(Node 버전의 `npm run ingest
 
 주요 코드: `LOGIN_FAILED`(401), `FORBIDDEN`(403), `NOT_FOUND`(404), `TOOL_NOT_FOUND`(404), `VERSION_CONFLICT`(409), `MARITIME_SHIP_IDENTITY_CONFLICT`(409), `SETUP_DISABLED`(410), `CONTENT_TYPE`(415), `ANOMALY`(운항 연료 급증 사유 누락). 메시지는 사용자에게 그대로 보여 줄 한국어 문장입니다.
 
+해사 데이터 적재·연결 작업과 복구의 테이블 잠금이 충돌하면 최대 5초 대기 후 **409 BUSY**를 반환합니다. 복구 트랜잭션은 롤백되어 앱 데이터와 해사 연결을 변경하지 않으며, 작업이 끝난 후 복구를 다시 시도할 수 있습니다.
+
 ## 6. 한계
 
 - 백업은 SHA-256 체크섬으로 우발적 손상만 검사하며, 서명 기반 진위 확인은 하지 않습니다. 가져오기는 형식 v2만 허용합니다.

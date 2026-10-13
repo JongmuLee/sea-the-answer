@@ -28,6 +28,14 @@
 
 ## 검증 기록
 
+### 2026-10-13 - PR #9 최종 점검
+
+- 최신 PR #8 기준과 PR #9의 import·이미지 경로·DB/API 계약·기존 데이터 보존 경계를 대조했다. 커밋된 migration 및 잠금 파일은 변경하지 않았다.
+- 해사 적재의 테이블 잠금과 복구가 충돌하면 기존 복구 요청이 오래 대기할 수 있음을 실제 PostgreSQL에서 재현했다. 복구의 lock_timeout을 5초로 제한하고 409 BUSY로 응답하도록 수정했다.
+- 회귀 테스트는 충돌 시 복구가 제때 거절되고 앱 선박·해사 연결·성공 감사 기록이 변경되지 않음을 확인한다.
+- 보완 후 backend 전체 **135 passed, skipped 0**(기존 Starlette 경고 1개), 관련 API·복구·매핑 **50 passed**, 깨끗한 Chromium의 production standalone e2e **16단계 통과**. dbmate와 실제 6개 CSV의 임시 DB 적재·데이터가 있는 rollback 거절도 다시 확인했다.
+- frontend 소스·의존성은 변경하지 않았으므로 앞선 단위 4개 및 production 빌드 검증을 유지한다. Docker 컨테이너 실행과 실제 개인 DB 이전은 미검증·미수행 범위로 유지한다.
+
 ### 2026-10-13 - 역할4 Tool·준비 작업·공통 DB 통합 (Windows)
 
 - 기준: 팀 PR #8 refactor/split-packages의 f0610d0. 기존 main 및 개인 작업 디렉터리와 분리한 worktree에서 검증했다.

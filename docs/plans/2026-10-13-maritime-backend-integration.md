@@ -60,3 +60,5 @@ backend pytest, 준비 스크립트 테스트, 임시 PostgreSQL의 fresh/legacy
 - 2026-10-13: `refactor/split-packages` 기준에서 피드백 반영 시작. 기존 채택 ADR의 본문은 유지하고 새 ADR 0011을 제안했다. 검증 결과는 완료 후 [changelog](../changelog.md)에 기록한다.
 
 - 2026-10-13: 최종 backend 134개(실 DB 생략 0), frontend 4개·빌드, 깨끗한 Chromium 16단계 검증을 기록하고 [팀 PR #9](https://github.com/dudco/sea-the-answer/pull/9)를 제출했다. 기준은 PR #8의 refactor/split-packages이며, 팀 main 병합은 수행하지 않았다.
+
+- 2026-10-13 최종 점검: 적재와 복구의 잠금 충돌을 재현해 5초 제한·409 BUSY·데이터 보존 회귀를 추가했다. 최종 backend 135개(실 DB 생략 0) 및 Chromium 16단계가 통과했고 PR #9에 보완했다.

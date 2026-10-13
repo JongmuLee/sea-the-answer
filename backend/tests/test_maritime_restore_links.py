@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ from psycopg.types.json import Jsonb
 import pytest
 
 from api.store import Workspace
+from api.errors import ApiError
 from api.store.backups import BACKUP_TABLES, BackupStore
 
 
@@ -216,3 +218,30 @@ def test_failed_restore_rolls_back_public_data_and_maritime_fk_changes(postgres_
     with Workspace(postgres_dsn) as db:
         assert db.one("SELECT body FROM ships WHERE id='ship-1'")["body"]["name"] == "Current name"
         assert db.one("SELECT ship_id FROM maritime_data.vessels")["ship_id"] == "ship-1"
+
+
+def test_restore_rejects_busy_import_without_waiting_or_changing_data(postgres_dsn, tmp_path):
+    with Workspace(postgres_dsn) as db:
+        add_ship(db, ship())
+        maritime_table(db)
+        add_link(db, "REAL:IMO:9074729", "ship-1")
+    saved = backup(postgres_dsn, tmp_path)
+    with Workspace(postgres_dsn) as db:
+        before_ships = db.all("SELECT * FROM ships")
+        before_sources = db.all("SELECT * FROM maritime_data.vessels")
+    # The CSV loader holds this same lock while copying its six tables.
+    with psycopg.connect(postgres_dsn) as importer:
+        importer.execute("LOCK TABLE maritime_data.vessels IN ACCESS EXCLUSIVE MODE")
+        start = time.monotonic()
+        with pytest.raises(ApiError) as error:
+            with Workspace(postgres_dsn) as db:
+                # A safety ceiling for the regression itself. Production must
+                # reject contention earlier with a deliberate BUSY response.
+                db.run("SET LOCAL statement_timeout='8s'")
+                db.restore_backup(ADMIN, tmp_path, {"id": saved["id"], "confirm": "복구"})
+        assert error.value.status == 409 and error.value.code == "BUSY"
+        assert time.monotonic() - start < 7.5
+    with Workspace(postgres_dsn) as db:
+        assert db.all("SELECT * FROM ships") == before_ships
+        assert db.all("SELECT * FROM maritime_data.vessels") == before_sources
+        assert db.one("SELECT count(*) AS count FROM audit WHERE action='전체 복구'")["count"] == 0

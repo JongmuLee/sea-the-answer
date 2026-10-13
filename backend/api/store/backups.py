@@ -11,7 +11,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from ..errors import require
+from ..errors import ApiError, require
 from ..validation import sha256, stamp, utc_now
 
 BACKUP_TABLES = (
@@ -46,19 +46,24 @@ class BackupStore:
                 and bool(before.get("sample")) == bool(body.get("sample")))
 
     def _maritime_links_before_restore(self) -> list[dict] | None:
-        ready = self.one("""SELECT EXISTS (
-            SELECT 1 FROM pg_attribute
-            WHERE attrelid=to_regclass('maritime_data.vessels')
-              AND attname='ship_id' AND NOT attisdropped
-        ) AS ready""")
-        if not ready["ready"]:
-            return None
-        # Offline mapping scripts do not share the API advisory lock. Prevent a
-        # new mapping from appearing between this snapshot and DELETE ships.
-        self.run("LOCK TABLE maritime_data.vessels IN SHARE ROW EXCLUSIVE MODE")
-        return self.all("""SELECT v.vessel_id, v.ship_id, v.imo_number, s.body
-            FROM maritime_data.vessels v LEFT JOIN public.ships s ON s.id=v.ship_id
-            WHERE v.ship_id IS NOT NULL""")
+        # Offline imports do not hold the API advisory lock. Never occupy the
+        # exclusive restore request slot indefinitely while such an import runs.
+        self.run("SET LOCAL lock_timeout = '5s'")
+        try:
+            ready = self.one("""SELECT EXISTS (
+                SELECT 1 FROM pg_attribute
+                WHERE attrelid=to_regclass('maritime_data.vessels')
+                  AND attname='ship_id' AND NOT attisdropped
+            ) AS ready""")
+            if not ready["ready"]:
+                return None
+            # Keep mappings stable until public ships and their links are restored.
+            self.run("LOCK TABLE maritime_data.vessels IN SHARE ROW EXCLUSIVE MODE")
+            return self.all("""SELECT v.vessel_id, v.ship_id, v.imo_number, s.body
+                FROM maritime_data.vessels v LEFT JOIN public.ships s ON s.id=v.ship_id
+                WHERE v.ship_id IS NOT NULL""")
+        except psycopg.errors.LockNotAvailable as exc:
+            raise ApiError(409, "BUSY", "해사 데이터 적재 또는 연결 작업이 진행 중입니다. 잠시 뒤 복구해 주세요.") from exc
 
     def _restore_maritime_links(self, links: list[dict]) -> dict:
         ships = {row["id"]: row["body"] for row in self.all("SELECT id,body FROM public.ships")}
