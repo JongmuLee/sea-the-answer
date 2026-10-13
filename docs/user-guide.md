@@ -78,6 +78,7 @@ DB가 비어 있으면 첫 요청 때 `backend/knowledge/seed.json`의 기본 �
 ## 6. 백업과 복구
 
 - **백업 만들기**: 문서·PDF·운항·보고서·계정 및 권한·질의·로그·승인·앱 설정을 JSON으로 DB 옆 `backups` 폴더에 보관합니다.
+- **해사 데이터 사용 시**: 앱 JSON 백업은 MRV·합성 Noon·출처·품질 테이블이나 원본 파일을 포함하지 않습니다. PostgreSQL과 원본 파일을 별도로 백업하세요. 앱 복구 후 기존 선박 연결은 동일한 식별정보가 확인된 경우만 유지되고, 누락·불일치는 연결 해제 건수로 기록됩니다. 원본 해사 데이터는 남습니다.
 - **파일 보관 / 가져오기**: 다른 저장장치에 보관할 파일을 내려받고, 100MB 이하의 전체 백업을 목록에 추가합니다(형식·체크섬 검증).
 - **복구**: 선택한 시점으로 현재 데이터를 교체합니다. 복구 직전 자동 백업, 트랜잭션 복구, 검색 인덱스 재생성, 모든 세션 무효화를 수행합니다. 관리 기능은 `admin / 1234`로 다시 로그인합니다.
 - **자동 백업**: 기본 하루 1회(UTC 날짜 기준, 서버 실행 중 1분마다 확인). 관리 화면에서 끌 수 있고 자동 삭제는 하지 않습니다.
@@ -137,7 +138,7 @@ docker compose up --build -d
 
 ## 10. 해사 데이터 Tool (선택)
 
-역할4 도구입니다. 코드는 `backend/maritime_data/`(backend uv 프로젝트의 일부), 계약은 [API 명세](specs/maritime-data-api.md)와 [데이터 명세](specs/maritime-data.md), 테이블·ERD는 [데이터 모델](data-model.md#9-postgresql-해사-데이터-tool-선택)에 있습니다. 아래 명령은 별도 표시가 없으면 저장소 최상위에서 실행합니다.
+역할4 도구입니다. 실행 중 조회·계산은 `backend/tools/maritime_data/`, 오프라인 자료 준비·적재는 `scripts/maritime_data/`, DDL은 루트 `migrations/`에 있습니다. 모두 backend uv 환경을 사용합니다. 계약은 [API 명세](specs/maritime-data-api.md)와 [데이터 명세](specs/maritime-data.md), 테이블·ERD는 [데이터 모델](data-model.md#9-postgresql-해사-데이터-tool-선택)에 있습니다. 아래 명령은 별도 표시가 없으면 저장소 최상위에서 실행합니다.
 
 ### 설치와 실행
 
@@ -147,48 +148,71 @@ Python 의존성은 backend와 같은 `backend/pyproject.toml`·`uv.lock`으로 
 uv sync --project backend --group data
 ```
 
-**앱에 마운트(권장)**: 최상위 `.env`에 `MARITIME_DATA_API_TOKEN`(직접 생성한 32자 이상 토큰)을 넣고, 해사 데이터가 앱과 다른 DB에 있으면 `MARITIME_DATA_DATABASE_URL`도 넣습니다(비우면 앱 DB 사용). `docker compose up -d`로 다시 시작하면 `/api/maritime-data/*`가 같은 backend에 생깁니다. 토큰이 비어 있으면 라우트가 만들어지지 않습니다. 개발 오버레이에서는 <http://127.0.0.1:8000/docs>에서 Authorize에 토큰을 넣고 시험할 수 있습니다.
+**앱에 마운트(권장)**: 최상위 `.env`에 `MARITIME_DATA_API_TOKEN`(직접 생성한 32자 이상 토큰)을 넣고 `docker compose up --build -d`로 시작합니다. 기본 앱 init과 새 해사 마이그레이션이 같은 DB에 적용된 뒤 backend가 시작합니다. 토큰이 비어 있으면 해사 라우트가 만들어지지 않습니다. 개발 오버레이에서는 <http://127.0.0.1:8000/docs>에서 Authorize에 토큰을 넣고 시험할 수 있습니다. 일반 앱 health는 DB를 확인하지만 해사 CSV가 적재되었음을 보증하지 않습니다.
 
-**독립 실행(역할4 도구 작업용)**: 루트 `.env.local`에 `DATABASE_URL`(SQLAlchemy 형식 `postgresql+psycopg://…`도 가능)과 `MARITIME_DATA_API_TOKEN`을 두고 실행합니다.
+**별도 해사 DB를 선택하는 경우**: `MARITIME_DATA_DATABASE_URL`로 다른 DB를 지정할 수 있습니다. compose의 기본 migrate 서비스는 앱 DB만 대상으로 하므로 별도 DB에도 같은 `migrations/`의 기본 init과 해사 migration을 따로 적용해야 합니다. 그 DB의 `public.ships`가 연결 대상이며 앱 DB를 넘는 외래키·자동 선박 동기화는 지원하지 않습니다. 특별한 이유가 없으면 같은 `DATABASE_URL`을 사용하세요.
+
+**독립 실행(역할4 도구 작업용)**: 최상위 `.env`에 `DATABASE_URL`과 `MARITIME_DATA_API_TOKEN`을 두고 환경파일을 명시해 실행합니다. 기존 `.env.local` 설정을 쓸 때는 아래 `--env-file`에 해당 파일을 지정합니다. 기존 파일을 무조건 덮어쓰지 마세요.
 
 ```bash
 cd backend
-uv run uvicorn maritime_data.api:create_app --factory --host 127.0.0.1 --port 8001
+uv run --env-file ../.env uvicorn tools.maritime_data.api:create_app --factory --host 127.0.0.1 --port 8001
 ```
 
 `/api/health`의 `database_checked=false`는 프로세스만 확인했으며 DB를 검증하지 않았다는 뜻입니다. 실제 DB 조회는 토큰을 포함한 `/api/maritime-data/query`로 확인합니다. 503이면 PostgreSQL 실행·연결·스키마 적재 상태를 확인하세요. 원본·CSV·DB·비밀번호·토큰은 Git에 넣지 않습니다.
 
-### 전처리·적재·생성·검증
+### 마이그레이션·전처리·적재·검증
+
+자료 준비·적재는 호스트 PC의 Python·uv에서 실행합니다. Docker로 앱을 시작했다면 기본 DB 포트는 호스트에 열리지 않으므로 개발 오버레이의 루프백 DB 포트를 사용하세요(`docker compose -f compose.yaml -f compose.dev.yaml up -d db`). 최상위 `.env`에서 `DATABASE_URL` 예제의 주석을 해제하고 실제 `POSTGRES_USER`·비밀번호·DB·호스트 포트와 일치시킵니다. 기본 호스트는 `127.0.0.1:5432`이며 `POSTGRES_PORT`를 바꿨으면 그 포트를 사용합니다. 컨테이너 내부의 `db:5432` 주소를 호스트 도구에 사용하지 않습니다.
+
+직접 PostgreSQL을 쓰는 경우에는 해당 DB의 호스트용 `DATABASE_URL`을 설정합니다. 이미 `docker compose up`으로 migration이 끝났으면 다시 적용할 필요가 없습니다. 아직 적용하지 않았거나 Docker 없이 준비한다면 저장소 최상위에서 다음 명령을 사용합니다. 기존 DB는 먼저 PostgreSQL 백업을 보관하세요. 아래 과정은 기존 데이터를 삭제하지 않습니다.
 
 ```powershell
-uv run --project backend --group data python backend/maritime_data/scripts/prepare_maritime_data.py --source D:/Data --out data/maritime-data/new-run
-./backend/maritime_data/scripts/load-maritime-data.ps1 -DataDir data/maritime-data/new-run
-uv run --project backend python backend/maritime_data/scripts/describe_maritime_data.py
-cd backend; uv run pytest -q maritime_data/tests; cd ..
-uv run --project backend --group data python backend/maritime_data/scripts/test_prepare_maritime_data.py
+npx --yes dbmate@2.36.0 -d migrations --no-dump-schema up
 ```
 
-이미 전처리한 CSV가 있으면 첫 명령을 생략합니다. 적재 스크립트는 Windows의 `psql.exe`를 사용하며 기본 PostgreSQL 경로가 다르면 `-PgBin`을 지정합니다. 로컬 DB만 지원하고 기존 `maritime_data` 스키마가 있으면 중단합니다. 실패 시 단일 적재 트랜잭션을 롤백합니다. 새 데이터 버전은 `schema/verify_load.sql`의 기대 건수를 먼저 검토합니다.
+```powershell
+uv run --locked --project backend --group data python -m scripts.maritime_data.prepare_maritime_data --source D:/Data --out data/maritime-data/new-run
+uv run --locked --project backend python -m scripts.maritime_data.load_data --data-dir data/maritime-data/new-run
+# 미리보기에서 입력 파일·건수를 확인한 뒤 적용
+uv run --locked --project backend python -m scripts.maritime_data.load_data --data-dir data/maritime-data/new-run --apply
+uv run --locked --project backend python -m scripts.maritime_data.describe_maritime_data
+cd backend; uv run pytest; cd ..
+uv run --locked --project backend --group data python -m scripts.maritime_data.test_prepare_maritime_data
+```
 
-설명 생성기는 기본적으로 `schema/schema.sql`·`dictionary.json`만 다시 생성합니다. 다른 출력 폴더는 `--out`으로 지정합니다. 이전 `--docs` 옵션과 `DATA_CONTRACT.md` 자동 생성은 제거했으며, 설명·ERD는 최상위 docs에서 직접 관리합니다.
+이미 전처리한 CSV가 있으면 첫 명령을 생략합니다. loader는 backend의 psycopg를 사용하므로 별도 `psql.exe`가 필요 없습니다. 기본 실행은 파일·헤더·요약 건수를 확인하는 미리보기이며 DB에 연결하지 않습니다. `--apply`를 추가해야 DB에 연결하여 dbmate의 해사 migration 적용 이력(`20261013010000`)과 6개 대상 테이블을 확인하고 COPY합니다. 하나라도 비어 있지 않으면 중단하며 기존 레코드를 삭제·덮어쓰지 않습니다. 실패 시 단일 적재 트랜잭션을 롤백합니다. 설정은 루트 `.env`가 기본이고 환경변수가 우선하며 `--env-file`로 바꿀 수 있습니다. DB 주소는 `DATABASE_URL`을 사용합니다.
+
+Windows 호환 래퍼는 `./scripts/maritime_data/load-maritime-data.ps1 -DataDir data/maritime-data/new-run`(미리보기), 같은 명령의 `-Apply`(실제 적재)입니다. uv가 PATH에 없으면 `-Uv 'uv 실행 파일 경로'`를 지정합니다. 이전 `-PgBin` 옵션은 없습니다. 버전별 과거 기대값을 확인하는 수동 SQL은 `scripts/maritime_data/verify_load.sql`이며 일반 loader는 입력 `summary.json`의 건수를 검증합니다.
+
+필드 사전 생성기는 전처리 CSV의 `dictionary.json`만 생성합니다(기본 `output/maritime-data-contract/`, 변경은 `--out`). CSV 원본 필드 70개와 관리용 DB 컬럼 `vessels.ship_id`를 구분합니다. DDL·마이그레이션·설명·ERD는 덮어쓰지 않으며 스키마 변경은 새 dbmate migration으로만 관리합니다.
 
 `MARITIME_DATA_TEST_DATABASE_URL`을 지정해야 기존 PostgreSQL 적재 데이터를 사용하는 읽기 전용 테스트가 실행됩니다. 미설정 시 이 테스트는 건너뛰며 단위 테스트 통과만으로 실 DB 검증을 주장하지 않습니다. API가 조회할 DB 사용자는 승인 뷰·출처 테이블에 필요한 읽기 권한만 갖도록 설정하는 것을 권장합니다. 도구의 READ ONLY 트랜잭션은 DB 사용자의 권한 자체를 바꾸지 않습니다.
 
-### 이전 역할4 환경의 이름 전환
+### 이전 역할4 스키마·설정의 채택
 
-이전 `role4/.env.local`을 사용한 환경은 필요한 설정을 저장소 루트 `.env.local`로 옮깁니다. 기존 `role4` 스키마·설정이 있으면 Tool을 중지하고 아래 미리보기를 확인한 뒤 이름 전환이 필요한 경우에만 `--apply`를 사용합니다.
+기존 `role4` 또는 `maritime_data` 스키마가 하나만 있는 DB에는 새 해사 migration이 기대 구조를 검증하고 채택합니다. `role4`인 경우 이름을 `maritime_data`로 바꾸되 원본 행을 다시 적재하지 않습니다. 양쪽이 함께 있거나 구조가 맞지 않으면 migration 전체를 거절하므로 임의로 테이블을 삭제해서 통과시키지 마세요. 백업과 구조를 확인한 뒤 충돌 원인을 해결해야 합니다. 기존 데이터가 있는 테이블에는 CSV loader를 실행하지 않습니다. 데이터가 있는 해사 스키마의 rollback도 거절합니다.
 
-```powershell
-uv run --project backend python backend/maritime_data/scripts/migrate_maritime_data.py
-# 미리보기 확인 후 적용이 필요한 경우에만:
-uv run --project backend python backend/maritime_data/scripts/migrate_maritime_data.py --apply
-```
-
-양쪽 스키마나 충돌하는 설정이 있으면 중단합니다. 변경된 설정은 `.env.local.before-maritime-data`에 백업하고 데이터 레코드·원본 폴더는 다시 쓰거나 이동하지 않습니다. DB 이름 전환은 앱 테이블과의 통합이나 공식 입력 검증을 의미하지 않습니다.
+이전 `role4/.env.local` 설정은 검토·백업 후 최상위 설정으로 옮깁니다. 원본 파일이나 비밀번호를 문서·Git에 복사하지 마세요. `scripts/maritime_data/migrate_maritime_data.py`는 이전 환경 호환용 보조 도구로만 남으며 새 설치·일반 업데이트 절차에서는 실행하지 않습니다. 표준 스키마 채택·변경은 위 dbmate 명령으로만 관리합니다. 스키마 채택은 공식 입력 검증을 의미하지 않습니다.
 
 ### 팀 앱 연결 시 참고
 
-backend 코드는 `from maritime_data import query, calculations, agent`로 공통 로직을 바로 호출할 수 있습니다(같은 프로세스). 화면에서 쓰려면 토큰 없이 앱 권한·CSRF·감사를 적용하는 어댑터 라우트가 필요하며 아직 구현되지 않았습니다. 토큰은 서버에 보관하고 브라우저로 보내지 않습니다. 현재 구현 범위와 경계 제안은 [아키텍처](architecture.md#8-해사-데이터-tool의-경계-선택), [ADR 0008](adr/0008-maritime-data-tool-boundary.md)를 참고하세요.
+backend 코드는 `from tools.maritime_data import query, calculations, agent`로 공통 로직을 바로 호출할 수 있습니다(같은 프로세스). 기존 앱 선박과의 연결은 `vessels.ship_id`에 검토한 매핑만 지정합니다. 원본 키는 보존하고 앱 선박을 대량 자동 생성하거나 MRV를 일별 기록으로 변환하지 않습니다. 화면에서 쓰려면 앱 권한·CSRF·감사를 적용하는 어댑터 라우트가 필요하며 아직 구현되지 않았습니다. 토큰은 서버에 보관하고 브라우저로 보내지 않습니다. 현재 경계는 [아키텍처](architecture.md#8-해사-데이터-tool의-경계-선택), [ADR 0011 제안](adr/0011-maritime-backend-integration.md)을 참고하세요.
+
+### 기존 앱 선박에 명시적으로 연결하기
+
+먼저 앱에 관리할 선박을 등록하고 실제 자료의 IMO가 같은지 확인합니다. 다음 예제의 `등록된-app-id`는 그 선박의 실제 `ships.id`로 바꿉니다. CLI는 저장소 루트 `.env`를 기본으로 읽고 환경변수가 우선합니다(`--env-file`로 변경 가능). 이 작업은 같은 DB의 `DATABASE_URL`만 사용하며 `MARITIME_DATA_DATABASE_URL`로 별도 DB를 지정해도 자동으로 옮기거나 동기화하지 않습니다.
+
+```powershell
+# 미리보기: DB를 변경하지 않음
+uv run --locked --project backend python -m scripts.maritime_data.link_ship --vessel-id REAL:IMO:9074729 --ship-id '등록된-app-id'
+# IMO·대상 선박을 검토한 뒤 같은 요청 적용
+uv run --locked --project backend python -m scripts.maritime_data.link_ship --vessel-id REAL:IMO:9074729 --ship-id '등록된-app-id' --apply
+```
+
+실제 원본은 등록된 비샘플 앱 선박의 IMO가 같아야 합니다. 합성 선박은 `SYN:*` 원본과 `sample=true`인 앱 예시 선박에만 `--confirm-synthetic`을 추가하여 연결합니다. 다른 기존 연결의 덮어쓰기나 하나의 앱 선박에 여러 원본 선박 연결은 거절하며, 동일 연결의 재실행은 값을 바꾸지 않습니다. 연결되지 않은 외부 선박도 원본 MRV/Noon 조회에는 남습니다. 연결은 원본의 사실성·공식 CII 입력 검증을 대신하지 않습니다.
+
+연결 후 운항 화면에서 실제 선박의 IMO·샘플 구분이나 합성 선박의 이름·선종·DWT·IMO·샘플 구분을 바꾸면 `MARITIME_SHIP_IDENTITY_CONFLICT`(409)로 거절합니다. 실제 선박은 같은 IMO를 유지하면 이름·DWT를 수정할 수 있습니다. 식별정보를 바꿔야 한다면 관리자가 연결을 수동 검토·해제한 뒤 수정하고, 새 식별정보를 확인해 다시 연결하세요. 앱이 원본 해사 자료나 기존 연결을 임의로 바꾸지는 않습니다.
 
 ### 원본 확보·공개 참조 자료·기존 데이터 버전
 
@@ -196,7 +220,7 @@ backend 코드는 `from maritime_data import query, calculations, agent`로 공�
 
 #### 전처리 원본 6종
 
-`backend/maritime_data/scripts/prepare_maritime_data.py`는 아래 파일명을 기준으로 원본 폴더를 재귀 검색합니다. 팀 보유본 또는 출처에서 해당 버전을 확보해야 하며 최신 웹 다운로드가 동일 파일·동일 건수를 보장하지는 않습니다.
+`scripts/maritime_data/prepare_maritime_data.py`는 아래 파일명을 기준으로 원본 폴더를 재귀 검색합니다. 팀 보유본 또는 출처에서 해당 버전을 확보해야 하며 최신 웹 다운로드가 동일 파일·동일 건수를 보장하지는 않습니다. 이번 분리는 자동 다운로드 기능을 새로 추가한 것이 아닙니다.
 
 | ID | 원본 파일 | 용도 |
 |---|---|---|
@@ -217,10 +241,10 @@ backend 코드는 `from maritime_data import query, calculations, agent`로 공�
 | IMO DCS 연차 보고서 | 2019~2024 공개 집계, 선박 단위 결합 불가 | `prepare_open_cii_references.py` |
 | Wikidata / MarineVessels | MRV 25,240척 중 15,956척에 DWT 후보, 법정 검증값 아님 | `prepare_open_cii_references.py` |
 
-GISIS 정규화는 `python backend/maritime_data/scripts/prepare_gisis_eedi.py INPUT.xlsx OUTPUT_DIR`로 실행합니다. 공개 CII 참조 처리 스크립트는 `data/maritime-data/2026-09-30-v2/reference/`의 수집 완료 파일을 입력으로 요구하며 자동 수집기가 아닙니다. 입력 구조: `reference/marine-vessels-2015/marine_vessels.csv`, `reference/wikidata-vessel-particulars/wikidata_ships_with_deadweight.csv`, `reference/imo-dcs-public-reports/`입니다. GISIS EEDI 원본 갱신일은 2025-12-02이며 익명 자료이므로 실제 MRV와 연결하지 않습니다. DWT 후보 출처 간 5% 초과 충돌은 검토 대상으로 남깁니다.
+GISIS 정규화는 `uv run --locked --project backend --group data python -m scripts.maritime_data.prepare_gisis_eedi INPUT.xlsx OUTPUT_DIR`로 실행합니다. 공개 CII 참조 처리 스크립트는 `data/maritime-data/2026-09-30-v2/reference/`의 수집 완료 파일을 입력으로 요구하며 자동 수집기가 아닙니다. 입력 구조: `reference/marine-vessels-2015/marine_vessels.csv`, `reference/wikidata-vessel-particulars/wikidata_ships_with_deadweight.csv`, `reference/imo-dcs-public-reports/`입니다. GISIS EEDI 원본 갱신일은 2025-12-02이며 익명 자료이므로 실제 MRV와 연결하지 않습니다. DWT 후보 출처 간 5% 초과 충돌은 검토 대상으로 남깁니다.
 
 공식 CII 산정에 필요한 동일 선박·동일 연도의 검증된 연료별 사용량, 항해거리, 적용 선종·용량 및 보정 조건은 아직 충분히 확보되지 않았습니다. 공개 집계와 제원 후보를 공식 입력으로 자동 승격하지 않습니다.
 
 #### 기존 데이터 버전
 
-2026-09-30 로컬 적재 기록: MRV 80,552행 중 조회 대상 79,032행, Partial 1,520행은 보존하되 기본 조회에서 제외. 합성 Noon 4,380행·238항차이며 거리 0인 기록 557행은 연료량을 보존합니다. 이 수치는 저장소에 데이터가 포함되거나 이번 작업에서 DB를 재검증했다는 의미가 아닙니다. 다른 데이터 버전에서는 `backend/maritime_data/schema/verify_load.sql`의 기대값을 검토하세요.
+2026-09-30 로컬 적재 기록: MRV 80,552행 중 조회 대상 79,032행, Partial 1,520행은 보존하되 기본 조회에서 제외. 합성 Noon 4,380행·238항차이며 거리 0인 기록 557행은 연료량을 보존합니다. 이 수치는 저장소에 데이터가 포함되거나 이번 작업에서 DB를 재검증했다는 의미가 아닙니다. 다른 데이터 버전에서는 `scripts/maritime_data/verify_load.sql`의 기대값을 검토하세요.

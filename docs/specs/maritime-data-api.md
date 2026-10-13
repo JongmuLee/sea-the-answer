@@ -2,15 +2,15 @@
 
 - 상태: 구현됨
 - 작성: 역할4 · 2026-10-08 (기존 2026-10-05 독립 Tool 계약의 문서 위치 정리)
-- 관련: [데이터 명세](maritime-data.md), [운영 안내](../user-guide.md#10-해사-데이터-tool-선택), [모듈 경계 ADR 제안](../adr/0008-maritime-data-tool-boundary.md), [정리 계획](../plans/2026-10-08-maritime-data-docs-alignment.md)
+- 관련: [데이터 명세](maritime-data.md), [운영 안내](../user-guide.md#10-해사-데이터-tool-선택), [통합 ADR 제안](../adr/0011-maritime-backend-integration.md), [통합 계획](../plans/2026-10-13-maritime-backend-integration.md)
 
 ## 목적과 범위
 
-PostgreSQL 해사 데이터를 읽는 독립 Python Tool의 요청·응답·오류·산술 범위를 정의합니다. `MARITIME_DATA_API_TOKEN`이 설정되면 앱 backend(FastAPI)에 `/api/maritime-data/*`로 함께 마운트되고([ADR 0009](../adr/0009-split-packages-and-compose.md)), 독립 앱(`create_app`)으로도 실행할 수 있습니다. 경로·요청·응답은 두 방식이 같습니다. [앱 API](api.md)와 달리 서버 전용 Bearer 토큰을 쓰며, 팀 앱의 HTTP 어댑터·선박 ID 매핑·접근 정책·영구 감사 기록 및 LLM 연결은 아직 구현되지 않았습니다.
+PostgreSQL 해사 데이터를 읽는 `backend/tools/maritime_data/`의 요청·응답·오류·산술 범위를 정의합니다. `MARITIME_DATA_API_TOKEN`이 설정되면 앱 backend(FastAPI)에 `/api/maritime-data/*`로 함께 마운트되고([ADR 0009](../adr/0009-split-packages-and-compose.md)), 독립 앱(`create_app`)으로도 실행할 수 있습니다. Tool 경로·요청·응답은 두 방식이 같습니다. [앱 API](api.md)와 달리 서버 전용 Bearer 토큰을 씁니다. DB의 선택적 `vessels.ship_id` 연결과 오프라인 명시 매핑은 제공하지만, 앱 선박 ID를 Tool 입력으로 자동 변환하는 화면 어댑터·사용자 접근 정책·영구 감사 통합 및 LLM 연결은 아직 구현되지 않았습니다.
 
 | 메서드·경로 | 역할 | Bearer 토큰 |
 |---|---|---|
-| `GET /api/health` | 프로세스 상태만 확인, `database_checked=false` | 불필요 |
+| `GET /api/health` (독립 앱만) | 프로세스 상태만 확인, `database_checked=false`. 마운트 실행 시 이 경로는 기본 앱 health이며 DB 확인·CSRF 응답 | 불필요 |
 | `POST /api/maritime-data/query` | 승인 뷰의 조건 조회 | 필요 |
 | `GET /api/maritime-data/factors` | 고정 버전의 계수 카탈로그 | 필요 |
 | `POST /api/maritime-data/calculate` | CO₂ 산술 및 입력 준비 상태 | 필요 |
@@ -24,9 +24,9 @@ PostgreSQL 해사 데이터를 읽는 독립 Python Tool의 요청·응답·오�
 
 ### 실행 및 접근
 
-해사 데이터 전용 API의 기본 주소는 `http://127.0.0.1:8001`입니다. 모든 Tool 요청에 `Authorization: Bearer <MARITIME_DATA_API_TOKEN>`이 필요합니다. 토큰은 서버의 `.env.local`에 설정하며 로그인 세션·CSRF·기존 public 앱 테이블은 사용하지 않습니다. 실행 예제는 [운영 안내](../user-guide.md#10-해사-데이터-tool-선택)를 참고하세요.
+일반 실행은 앱 backend(`http://127.0.0.1:8000`, 운영 compose에서는 내부 주소)에 마운트합니다. 독립 도구 실행 예제는 `http://127.0.0.1:8001`입니다. 모든 Tool 요청에 `Authorization: Bearer <MARITIME_DATA_API_TOKEN>`이 필요합니다. 설정은 서버 환경변수에 두며, 앱 실행은 최상위 `.env`, 이전 도구 환경의 `.env.local`은 운영 안내의 호환 절차를 따릅니다. Tool 자체는 앱 로그인 세션·CSRF로 인증하지 않습니다. 실행 예제는 [운영 안내](../user-guide.md#10-해사-데이터-tool-선택)를 참고하세요.
 
-내부 Python 진입점은 `backend.maritime_data.query.query(engine, body)`입니다. 팀 앱에 직접 연결할 때는 호출자가 사용자 권한을 검사해야 합니다. `/api/maritime-data/ask`는 고정 scope의 규칙 기반 조회 도우미이며 LLM 연결은 포함하지 않습니다.
+backend 실행 환경의 내부 Python 진입점은 `tools.maritime_data.query.query(engine, body)`입니다. 팀 앱에 직접 연결할 때는 호출자가 사용자 권한을 검사해야 합니다. `/api/maritime-data/ask`는 고정 scope의 규칙 기반 조회 도우미이며 LLM 연결은 포함하지 않습니다.
 
 ### 입력
 
@@ -69,6 +69,8 @@ MRV는 reporting_year/vessel_id/record_id, Noon은 report_date/vessel_id/record_
 ### DB 및 오류
 
 `maritime_data.real_annual_query`와 `maritime_data.development_noon_query`만 조회하며 출처 테이블을 조인합니다. MRV Partial 및 집계 부적격 레코드와 Noon 비VALID를 제외합니다. 연간 자료를 일별로 분해하거나 실제와 합성을 조인하지 않습니다.
+
+스키마는 앱과 같은 루트 dbmate 흐름으로 적용하며 Tool은 DDL·다운로드·CSV 적재를 실행하지 않습니다. 기본 `DATABASE_URL`을 사용하고 별도 `MARITIME_DATA_DATABASE_URL`을 선택하면 그 DB에도 기본 init과 해사 마이그레이션이 필요합니다. `vessels.ship_id`는 관리용 선택 연결이며 조회 요청의 `vessel_id`는 계속 원본 `REAL:IMO:*`/`SYN:*`를 사용합니다. 선박 연결을 추가해도 기존 승인 View의 필드와 응답 계약은 바꾸지 않습니다.
 
 SQL 식별자는 서버 고정값, 입력은 바인딩 매개변수입니다. PostgreSQL READ ONLY / REPEATABLE READ 트랜잭션, SQL 문장당 5초 제한을 적용합니다. 조회 성공 이벤트는 서버 logger(maritime_data.audit)에 기록합니다. 영구 감사 저장은 팀 앱 연동 범위입니다. maritime_data·원본 파일은 수정하지 않습니다.
 
@@ -169,4 +171,4 @@ CO2_t = Σ(연료종류별 사용량 t × CF). 기간 DWT 집약도 = CO2_t × 1
 
 ## 열린 질문
 
-- 팀 내부 API와의 HTTP 연결 방식, 실제 선박 키와 앱 `ships.id`의 매핑, 사용자 접근 정책 및 감사·오류 전달 방식을 팀 연결 단계에서 합의한다.
+- 명시 매핑으로 연결한 앱 `ships.id`를 사용자 요청에서 Tool의 원본 키로 변환하는 어댑터, 사용자 접근 정책 및 감사·오류 전달 방식을 팀 연결 단계에서 합의한다.

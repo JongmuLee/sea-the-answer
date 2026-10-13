@@ -101,8 +101,10 @@ sequenceDiagram
 | `api/config.py`, `api/deps.py` | 환경 설정(DB 주소, 백업 경로, 허용 호스트), `Workspace` 열기와 최초 1회 초기화 |
 | `api/errors.py`, `api/validation.py` | `ApiError`·`require`, 입력 검증·형식 도우미 |
 | `knowledge/seed.json`, `knowledge/sample-data.json` | 기본 문서, "예시 데이터 넣기"용 가상 운항 기록 |
-| `maritime_data/` | 해사 데이터 조회·계산 Tool(8절). `scripts/`는 오프라인 전처리(`uv sync --group data`) |
-| `tests/`, `maritime_data/tests/` | pytest (`backend/`에서 `uv run pytest`) |
+| `tools/maritime_data/` | 서비스 실행 중 사용하는 읽기 전용 해사 데이터 조회·계산·규칙 기반 조회 도우미(8절) |
+| `tests/` | 앱과 해사 Tool pytest (`backend/`에서 `uv run pytest`) |
+
+최상위 `scripts/maritime_data/`는 원본·공개 참조 자료 정규화, 전처리·품질 판정, 필드 사전 생성, CSV 적재 및 명시적 선박 연결을 담당합니다. backend uv 환경의 `data` 의존성 그룹을 사용하며 운영 이미지에는 포함하지 않습니다([ADR 0011 제안](adr/0011-maritime-backend-integration.md)). 자료 준비는 서비스 시작이나 Tool 호출 때 자동 실행하지 않습니다.
 
 DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유합니다. backend는 테이블이 없으면 `SCHEMA_NOT_READY`(503)를 반환합니다.
 
@@ -158,19 +160,24 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 
 ## 8. 해사 데이터 Tool의 경계 (선택)
 
-`backend/maritime_data/`는 역할4 모듈로, PostgreSQL `maritime_data` 스키마의 승인 View를 읽기 전용으로 조회·계산합니다. 이제 backend와 같은 uv 프로젝트이며, `MARITIME_DATA_API_TOKEN`(32자 이상)을 설정하면 같은 FastAPI 프로세스에 `/api/maritime-data/*`로 마운트됩니다. 설정하지 않으면 라우트가 없습니다. DB는 `MARITIME_DATA_DATABASE_URL`, 비어 있으면 `DATABASE_URL`을 씁니다.
+`backend/tools/maritime_data/`는 PostgreSQL `maritime_data` 스키마의 승인 View를 읽기 전용으로 조회·계산합니다. backend와 같은 uv 프로젝트이며, `MARITIME_DATA_API_TOKEN`(32자 이상)을 설정하면 같은 FastAPI 프로세스에 `/api/maritime-data/*`로 마운트됩니다. 설정하지 않으면 라우트가 없습니다. 기본은 앱의 `DATABASE_URL`이며 `MARITIME_DATA_DATABASE_URL`로 별도 DB를 선택할 수 있습니다. 별도 DB에도 기본 init과 해사 마이그레이션을 모두 적용해야 하며 선박 외래키는 그 DB 안의 `public.ships`만 참조합니다.
 
 ```mermaid
 flowchart LR
-  R[별도 원본·참조 자료] --> P[maritime_data/scripts<br/>전처리·품질·출처 보존]
-  P --> DB[(PostgreSQL maritime_data 스키마)]
+  R[별도 원본·참조 자료] --> P[scripts/maritime_data<br/>오프라인 전처리·품질·출처 보존]
+  M[migrations/<br/>dbmate · DDL만 적용] --> S[(PostgreSQL 앱 테이블<br/>public.ships / operations)]
+  M --> DB[(같은 DB · maritime_data<br/>MRV / Noon / 출처 / 품질)]
+  P -->|migration 선행·빈 테이블 CSV 적재| DB
   B[브라우저] --> N[Next.js :5173]
   N -->|/api/* proxy.js| G[FastAPI backend]
-  G --> S[(앱 테이블)]
-  G -->|/api/maritime-data/*<br/>Bearer 토큰 필요| T[maritime_data 라우터]
+  G --> S
+  DB -. vessels.ship_id<br/>검토한 명시적 연결 .-> S
+  G -->|/api/maritime-data/*<br/>Bearer 토큰 필요| T[tools.maritime_data 라우터]
   T -->|승인 View 읽기 전용| DB
 ```
 
-라우트는 서버 전용 Bearer 토큰을 요구하므로 **화면에서 바로 호출할 수는 없습니다.** 화면 연결은 아직 구현되지 않았고, 연결할 때는 토큰을 숨긴 채 팀 접근 정책·POST CSRF·사용자별 감사·오류 처리를 적용하는 어댑터가 필요합니다. 팀 `ships.id`와 `REAL:IMO:*`/`SYN:*`의 명시적 매핑도 필요합니다. 공식 CII 등급은 생성하지 않으며, `/ask`의 실제 LLM 호출은 비활성입니다.
+`vessels.ship_id`의 선택적 외래키로 기존 앱 `ships`를 재사용합니다. 연결은 준비 CLI의 명시적 매핑으로만 수행하고 외부 선박 전체를 자동 등록하지 않습니다. MRV는 보고기간 단위이므로 기존 일별 `operations`로 분해하지 않습니다. 원본 식별자와 REAL/SYN 구분, 출처·품질 정보를 그대로 유지합니다.
 
-`maritime_data.api.create_app()`은 테스트·역할4 도구용 독립 앱으로 남아 있습니다. 입출력은 [API 명세](specs/maritime-data-api.md), 저장 구조는 [데이터 모델](data-model.md#9-postgresql-해사-데이터-tool-선택), 데이터 확보는 [운영 안내](user-guide.md#10-해사-데이터-tool-선택)를 참고하세요.
+라우트는 서버 전용 Bearer 토큰을 요구하므로 **화면에서 바로 호출할 수는 없습니다.** 화면 연결은 아직 구현되지 않았고, 연결할 때는 토큰을 숨긴 채 팀 접근 정책·POST CSRF·사용자별 감사·오류 처리를 적용하는 어댑터가 필요합니다. DB에 선박 연결 컬럼을 추가한 것만으로 화면의 앱 선박 ID가 Tool의 원본 식별자로 자동 변환되지는 않습니다. 공식 CII 등급은 생성하지 않으며, `/ask`의 실제 LLM 호출은 비활성입니다.
+
+`tools.maritime_data.api.create_app()`은 테스트·역할4 도구용 독립 앱으로 남아 있습니다. 마이그레이션은 앱과 해사 DDL을 소유하고 loader는 DDL을 실행하지 않습니다. 기존 단일 스키마 채택·rollback 제한과 앱 복구 시 선박 연결 정책은 [데이터 모델](data-model.md#9-postgresql-해사-데이터-tool-선택)에 정의합니다. 입출력은 [API 명세](specs/maritime-data-api.md), 데이터 확보는 [운영 안내](user-guide.md#10-해사-데이터-tool-선택)를 참고하세요.

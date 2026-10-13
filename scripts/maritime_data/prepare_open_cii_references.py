@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data" / "maritime-data" / "2026-09-30-v2"
 REFERENCE = DATA / "reference"
 OUTPUT = REFERENCE / "open-cii-inputs"

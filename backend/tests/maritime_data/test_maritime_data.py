@@ -9,8 +9,8 @@ from sqlalchemy.exc import OperationalError
 from fastapi import HTTPException
 from unittest.mock import MagicMock
 
-from maritime_data import query as maritime_data
-from maritime_data.tests.api_support import app, login
+from tools.maritime_data import query as maritime_data
+from .api_support import app, login
 
 
 ANNUAL = {'dataset': 'real_annual', 'year_start': 2015, 'year_end': 2025}

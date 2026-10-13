@@ -8,9 +8,25 @@ from psycopg.types.json import Jsonb
 
 from ..errors import ApiError, require
 from ..validation import stamp, utc_now
+from .backups import BackupStore
 
 
 class ChangeStore:
+    def _maritime_links_for_ship_change(self, ship_id: str) -> list[dict] | None:
+        ready = self.one("""SELECT EXISTS (
+            SELECT 1 FROM pg_attribute
+            WHERE attrelid=to_regclass('maritime_data.vessels')
+              AND attname='ship_id' AND NOT attisdropped
+        ) AS ready""")
+        if not ready["ready"]:
+            return None
+        # Match restore/link CLI lock order and prevent a new offline mapping
+        # from racing the app's identity check. Source records stay unchanged.
+        self.run("SET LOCAL lock_timeout = '5s'")
+        self.run("LOCK TABLE maritime_data.vessels IN SHARE ROW EXCLUSIVE MODE")
+        return self.all("""SELECT vessel_id,imo_number FROM maritime_data.vessels
+            WHERE ship_id=%s""", (ship_id,))
+
     def apply_change(self, kind: str, payload: dict) -> dict:
         if kind == "document.save":
             return self.save_document(payload)
@@ -18,8 +34,14 @@ class ChangeStore:
             return self.delete_document(payload["id"])
         if kind == "ship.save":
             ship = self.validate_ship(payload)
-            old = self.one("SELECT version FROM ships WHERE id=%s", (ship["id"],))
+            links = self._maritime_links_for_ship_change(ship["id"])
+            old = self.one("SELECT version,body FROM ships WHERE id=%s FOR UPDATE" if links is not None
+                           else "SELECT version FROM ships WHERE id=%s", (ship["id"],))
             require((old or {}).get("version", 0) == payload.get("version", 0), "선박 정보가 변경되었습니다.", "VERSION_CONFLICT", 409)
+            for link in links or []:
+                require(old and BackupStore._maritime_ship_matches({**link, "body": old["body"]}, ship),
+                        "해사 데이터 연결과 다른 선박 식별정보로 변경할 수 없습니다. 연결을 검토·해제한 후 다시 시도해 주세요.",
+                        "MARITIME_SHIP_IDENTITY_CONFLICT", 409)
             saved = (self.one("UPDATE ships SET body=%s,version=version+1 WHERE id=%s AND version=%s RETURNING version",
                               (Jsonb(ship), ship["id"], old["version"])) if old else
                      self.one("INSERT INTO ships(id,body,version) VALUES(%s,%s,1) ON CONFLICT DO NOTHING RETURNING version",

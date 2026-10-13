@@ -41,6 +41,7 @@
 | [`plans/2026-10-08-team-module-integration.md`](plans/2026-10-08-team-module-integration.md) — RAG·LLM·Tool 팀 모듈 연결 로드맵 | 초안 |
 | [`plans/2026-10-08-maritime-data-docs-alignment.md`](plans/2026-10-08-maritime-data-docs-alignment.md) — 역할4 PR 문서·모듈 구조 정리 | 완료 |
 | [`plans/2026-10-08-maritime-data-pr-update.md`](plans/2026-10-08-maritime-data-pr-update.md) — 역할4 PR 최신 main 반영 및 제출 | 완료 |
+| [`plans/2026-10-13-maritime-backend-integration.md`](plans/2026-10-13-maritime-backend-integration.md) — 해사 runtime·준비 작업·마이그레이션·선박 연결 통합 | 진행 중 |
 
 ### adr — 설계 결정
 
@@ -56,6 +57,7 @@
 | [0008](adr/0008-maritime-data-tool-boundary.md) | 해사 데이터 Tool의 독립 실행과 내부 API 연결 경계 | 제안 (실행 위치는 0009로 대체) |
 | [0009](adr/0009-split-packages-and-compose.md) | frontend·backend 독립 패키지 + 최상위 docker compose + `e2e/` | 채택 (DB 초기화는 0010으로 대체) |
 | [0010](adr/0010-dbmate-migrations.md) | DB 스키마를 최상위 `migrations/` SQL 파일 + dbmate로 관리 | 채택 |
+| [0011](adr/0011-maritime-backend-integration.md) | 해사 runtime·준비 작업 분리와 공통 마이그레이션·명시적 선박 연결 | 제안 |
 
 ## 작성 규칙 요약
 

@@ -61,7 +61,7 @@
 
 ## 5. 코드 작업 규칙
 
-- 최상위 소스 폴더는 `frontend/`(npm), `backend/`(uv), `e2e/`(npm, Playwright), `migrations/`(dbmate SQL) 네 개입니다. 새 최상위 폴더는 `docs/` 외에 만들지 않습니다(필요하면 ADR로 결정, [ADR 0009](docs/adr/0009-split-packages-and-compose.md), [ADR 0010](docs/adr/0010-dbmate-migrations.md)).
+- 최상위 소스 폴더는 `frontend/`(npm), `backend/`(uv), `e2e/`(npm, Playwright), `migrations/`(dbmate SQL)와 오프라인 자료 준비 전용 `scripts/`입니다. 팀 피드백을 반영한 [ADR 0011 제안](docs/adr/0011-maritime-backend-integration.md)에 따라 `scripts/maritime_data/`만 예외로 추가하며 backend uv 환경을 사용합니다. 실행 중 호출되는 Tool은 `backend/tools/`에 두고 스키마 변경은 `migrations/`에서만 합니다. 이외 새 최상위 폴더는 `docs/` 외에 만들지 않습니다(필요하면 ADR로 결정, [ADR 0009](docs/adr/0009-split-packages-and-compose.md), [ADR 0010](docs/adr/0010-dbmate-migrations.md)).
 - 최상위에는 패키지 매니저 파일(`package.json`, `pyproject.toml`)을 두지 않습니다. 의존성은 해당 폴더에서만 추가합니다(`cd frontend && npm install …`, `cd backend && uv add …`). frontend와 backend는 서로의 파일을 import하지 않고 HTTP `/api/*`로만 연결합니다.
 - 서비스 실행 구성은 최상위 `compose.yaml`(운영)·`compose.dev.yaml`(개발)과 각 폴더의 `Dockerfile`에서 관리합니다. 공개 포트는 frontend 하나입니다.
 - 인증·문서 열람 범위·인용 권한 검사를 우회하는 코드를 넣지 않습니다(`docs/architecture.md`의 보안 경계 참고).

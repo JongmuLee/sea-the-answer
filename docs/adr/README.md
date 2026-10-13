@@ -31,5 +31,6 @@
 | [0008](0008-maritime-data-tool-boundary.md) | 해사 데이터 Tool의 독립 실행과 내부 API 연결 경계 | 제안 (실행 위치는 0009로 대체) | 2026-10-08 |
 | [0009](0009-split-packages-and-compose.md) | frontend·backend 독립 패키지 + 최상위 docker compose + `e2e/` | 채택 (DB 초기화는 0010으로 대체) | 2026-10-13 |
 | [0010](0010-dbmate-migrations.md) | DB 스키마를 최상위 `migrations/` SQL 파일 + dbmate로 관리 | 채택 | 2026-10-13 |
+| [0011](0011-maritime-backend-integration.md) | 해사 runtime·준비 작업 분리와 공통 마이그레이션·명시적 선박 연결 | 제안 | 2026-10-13 |
 
 0002~0004는 이미 구현된 결정을 2026-10-08에 소급 기록한 것입니다. 날짜는 해당 결정이 들어간 버전의 날짜입니다.

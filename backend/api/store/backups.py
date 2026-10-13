@@ -23,6 +23,62 @@ BACKUP_TABLES = (
 
 class BackupStore:
     @staticmethod
+    def _maritime_ship_matches(link: dict, body: dict) -> bool:
+        """A restored app ID alone is not evidence that it is the same vessel."""
+        if not isinstance(body, dict):
+            return False
+        vessel_id = str(link.get("vessel_id") or "")
+        source_imo = str(link.get("imo_number") or "").strip()
+        if vessel_id.startswith("REAL:IMO:"):
+            restored_imo = re.sub(r"^IMO\s*", "", str(body.get("imo") or "").strip(), flags=re.I)
+            return (bool(re.fullmatch(r"[0-9]{7}", source_imo))
+                    and vessel_id == "REAL:IMO:" + source_imo
+                    and restored_imo == source_imo and not body.get("sample"))
+        if not vessel_id.startswith("SYN:"):
+            return False
+        # Synthetic vessels have no authoritative IMO. Preserve only a previously
+        # explicit link whose identity fields survive the restore unchanged.
+        before = link.get("body")
+        if not isinstance(before, dict) or not all(before.get(key) for key in ("name", "type", "dwt")):
+            return False
+        return (all(before.get(key) == body.get(key) for key in ("name", "type", "dwt"))
+                and str(before.get("imo") or "").strip() == str(body.get("imo") or "").strip()
+                and bool(before.get("sample")) == bool(body.get("sample")))
+
+    def _maritime_links_before_restore(self) -> list[dict] | None:
+        ready = self.one("""SELECT EXISTS (
+            SELECT 1 FROM pg_attribute
+            WHERE attrelid=to_regclass('maritime_data.vessels')
+              AND attname='ship_id' AND NOT attisdropped
+        ) AS ready""")
+        if not ready["ready"]:
+            return None
+        # Offline mapping scripts do not share the API advisory lock. Prevent a
+        # new mapping from appearing between this snapshot and DELETE ships.
+        self.run("LOCK TABLE maritime_data.vessels IN SHARE ROW EXCLUSIVE MODE")
+        return self.all("""SELECT v.vessel_id, v.ship_id, v.imo_number, s.body
+            FROM maritime_data.vessels v LEFT JOIN public.ships s ON s.id=v.ship_id
+            WHERE v.ship_id IS NOT NULL""")
+
+    def _restore_maritime_links(self, links: list[dict]) -> dict:
+        ships = {row["id"]: row["body"] for row in self.all("SELECT id,body FROM public.ships")}
+        counts = {"linkedBefore": len(links), "restored": 0, "cleared": 0,
+                  "missingShips": 0, "identityMismatch": 0}
+        for link in links:
+            if link["ship_id"] not in ships:
+                counts["missingShips"] += 1
+            elif not self._maritime_ship_matches(link, ships[link["ship_id"]]):
+                counts["identityMismatch"] += 1
+            else:
+                # DELETE ships has set the FK to NULL. No source/quality rows or
+                # source identities are rewritten by this app-only restore.
+                self.run("""UPDATE maritime_data.vessels SET ship_id=%s
+                    WHERE vessel_id=%s AND ship_id IS NULL""", (link["ship_id"], link["vessel_id"]))
+                counts["restored"] += 1
+        counts["cleared"] = counts["missingShips"] + counts["identityMismatch"]
+        return counts
+
+    @staticmethod
     def backup_path(directory: Path, backup_id: str) -> Path:
         require(bool(re.fullmatch(r"[a-f0-9-]{36}", backup_id)), "백업 ID를 확인해 주세요.")
         return directory / (backup_id + ".json")
@@ -101,6 +157,7 @@ class BackupStore:
         snapshot = self.read_backup(user, directory, payload.get("id", ""))
         data = self.validate_backup(snapshot)
         safety = self.create_backup(user, directory, "복구 직전 자동 보관")
+        maritime_links = self._maritime_links_before_restore()
         for table in reversed(BACKUP_TABLES):
             self.run(f"DELETE FROM {table}")
         for table in BACKUP_TABLES:
@@ -110,5 +167,12 @@ class BackupStore:
                 values = [Jsonb(row[key]) if key in ("body", "sources", "input", "output", "response", "detail", "payload") and isinstance(row[key], (dict, list))
                           else bool(row[key]) if key == "active" else row[key] for key in columns]
                 self.run(f"INSERT INTO {table}({','.join(columns)}) VALUES({placeholders})", tuple(values))
-        self.audit(user, "backup", "전체 복구", payload["id"], {"safetyBackup": safety["id"]})
-        return {"ok": True, "safetyBackup": safety["id"]}
+        detail = {"safetyBackup": safety["id"]}
+        warnings = []
+        if maritime_links is not None:
+            detail["maritimeLinks"] = self._restore_maritime_links(maritime_links)
+            if detail["maritimeLinks"]["cleared"]:
+                warnings.append("복구된 선박이 없거나 식별정보가 달라 해사 데이터 연결 "
+                                f"{detail['maritimeLinks']['cleared']}건을 해제했습니다. 원본 해사 데이터는 유지됩니다.")
+        self.audit(user, "backup", "전체 복구", payload["id"], detail)
+        return {"ok": True, **detail, **({"warnings": warnings} if warnings else {})}

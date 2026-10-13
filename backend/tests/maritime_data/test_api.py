@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
-from maritime_data.api import create_app
-from maritime_data import query as maritime_data, calculations as maritime_data_calculations
-from maritime_data.tests.api_support import app, login, TOKEN
+from tools.maritime_data.api import create_app
+from tools.maritime_data import query as maritime_data, calculations as maritime_data_calculations
+from .api_support import app, login, TOKEN
 
 QUERY = {'dataset': 'real_annual', 'year_start': 2020, 'year_end': 2025}
 CALC = {'scope': {'dataset': 'real_annual', 'vessel_id': 'REAL:IMO:1234567', 'year': 2020}}

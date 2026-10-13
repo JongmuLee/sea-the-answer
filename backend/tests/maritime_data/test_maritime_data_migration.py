@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from types import SimpleNamespace
 import pytest
-from maritime_data.scripts.migrate_maritime_data import migrate_settings, migrate_schema
+from scripts.maritime_data.migrate_maritime_data import migrate_settings, migrate_schema
 
 
 def test_settings_keep_values_and_comments_and_are_idempotent():

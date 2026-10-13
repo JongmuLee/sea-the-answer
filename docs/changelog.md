@@ -4,6 +4,8 @@
 
 ## 변경 이력
 
+- **역할4 피드백 반영 / 2026-10-13** (버전 유지, [ADR 0011 제안](adr/0011-maritime-backend-integration.md)): 실행 Tool을 backend/tools/maritime_data, 준비·적재 스크립트를 최상위 scripts/maritime_data로 분리. 새 dbmate migration으로 해사 DDL을 통합하고 기존 public.ships와 명시적으로 연결한다. MRV·합성 Noon·출처·품질 모델과 API 계약은 유지한다. 기존 데이터 채택·비어 있지 않은 대상 재적재/rollback 거절, 앱 복구 시 연결 보존/해제 기록, 연결된 선박 식별정보 변경 보호를 추가했다.
+
 - **backend 코드 구조 정리 / 2026-10-13** (동작 변경 없음): `backend/pyapi/`를 `backend/api/`로 바꾸고 두 파일에 몰려 있던 코드를 나눔 — `main.py`(앱), `web/`(보안·동시성·진입점·자동 백업), `routes/`(도메인별 경로 표), `store/`(`Workspace`를 도메인 mixin으로 분리), `config`·`deps`·`errors`·`validation`. ASGI 경로는 `api.main:app`. 경로 30개·접두 경로 3개와 `Workspace` 메서드 47개가 이전과 같음을 대조했고, `uv run pytest`(57 통과)와 e2e로 확인.
 - **DB 마이그레이션 도입 / 2026-10-13** (버전 유지, [ADR 0010](adr/0010-dbmate-migrations.md)): 앱 스키마를 최상위 `migrations/`의 SQL 파일(dbmate, up/down)로 관리. `backend/pyapi/schema.sql`을 첫 마이그레이션 `20261013000000_init.sql`로 옮기고 삭제. compose에 일회성 `migrate`·`e2e-migrate` 서비스(`amacneil/dbmate:2.36.0`)를 추가해 backend보다 먼저 적용하고, db 컨테이너의 initdb 스크립트 마운트 제거.
 - **패키지 분리·docker compose·e2e / 2026-10-13** (버전 유지, [ADR 0009](adr/0009-split-packages-and-compose.md)): `package.json`·lockfile을 `frontend/`로 옮기고(Playwright 제거), `backend/`를 자체 uv 프로젝트로 정리(Python 3.12~3.13, `pyapi`·`maritime_data`를 `backend/`에서 바로 import). 최상위에 `compose.yaml`(db·backend·frontend, profile `e2e`), `compose.dev.yaml`(소스 마운트·핫 리로드), 서비스별 `Dockerfile`(prod·dev 타깃), 최상위 `e2e/`(Playwright Test, 기존 `scripts/next-browser-smoke.mjs` 시나리오 14단계 이식) 추가. 쓰이지 않던 Node/SQLite 백엔드(`backend/*.mjs`와 테스트)와 `scripts/` 전체(실행기·Windows 실행기·SQLite 점검·JSON 수집) 제거, 예시 운항 데이터를 `backend/knowledge/sample-data.json`으로 변환. SQLite → PostgreSQL 이전 도구 `pyapi/migrate_sqlite.py` 제거(만든 PostgreSQL DB가 없고, 로컬 SQLite에도 테스트 흔적만 있어 옮길 데이터 없음). `maritime_data`의 별도 `pyproject.toml`·requirements를 backend로 통합하고 `MARITIME_DATA_API_TOKEN`이 있으면 `/api/maritime-data/*`를 같은 앱에 마운트. Next.js는 `output: 'standalone'`.
@@ -25,6 +27,20 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-13 - 역할4 Tool·준비 작업·공통 DB 통합 (Windows)
+
+- 기준: 팀 PR #8 refactor/split-packages의 f0610d0. 기존 main 및 개인 작업 디렉터리와 분리한 worktree에서 검증했다.
+- 환경: Windows, Node.js 24.16.0, Python 3.12.14, PostgreSQL 18, dbmate 2.36.0, backend/frontend/e2e의 기존 잠금 파일. 잠금 파일과 이미 커밋된 init migration은 변경하지 않았다.
+- backend 전체 pytest: **134 passed**, 실 DB 생략 **0**. Starlette/httpx 사용 중단 경고 1개는 기존 의존성에서 발생한다.
+- 실제 PostgreSQL 회귀: 새/기존 maritime_data/기존 role4 채택, 충돌·컬럼/제약 불일치 거절 및 원복, 데이터가 있는 down 거절, 빈 스키마 down/up, 명시적 선박 연결·식별 변경 거절, 앱 백업·복구 호환·중간 실패 rollback, CSV 헤더·건수·출처 검증·재적재 거절을 포함한다.
+- dbmate 실 실행: up → status → up(변화 없음) → rollback(빈 스키마) → up 통과. 데이터가 있는 별도 DB에서 rollback이 실패하고 migration 이력 및 데이터가 보존됨을 확인했다.
+- 보유 처리본은 읽기만 하고 임시 DB에 적재했다: source_files 6, vessels 25,252, annual_reports 80,552, synthetic_noon 4,380, synthetic_voyages 238, quality_issues 26,249. 실제 연간 조회 View는 79,032행, 앱 ships 자동 생성은 0행이다.
+- frontend: 단위 테스트 **4 passed**, npm run build 성공. 실제 Next standalone → FastAPI → PostgreSQL 및 마운트된 해사 factors 경로 확인.
+- e2e: Playwright 1.62.1의 깨끗한 Chromium Headless Shell에서 **1개 시나리오·16단계 통과**, 종료 코드 0. 테스트별 DB·API/화면 포트·백업 디렉터리를 분리하고 소유 프로세스를 종료했다.
+- 기존 설치 Chrome 실행은 외부 요청의 ERR_CERT_AUTHORITY_INVALID 경고로 최종 검사가 실패했다. 이후 테스트 전용 Chromium에서 경고 검사를 유지한 채 통과했으며 인증서 검사를 끄지 않았다. 재실행 준비 중에는 이전 테스트의 백업 폴더가 재사용돼 복구/생성 요청이 겹친 것을 확인하고, 테스트마다 폴더를 분리했다.
+- CLI help·사전 JSON 생성·PowerShell 구문 분석·git diff --check 통과.
+- 미검증: Docker 실행 파일이 없어 compose 이미지 빌드·컨테이너 e2e는 실행하지 않았다. 대신 동일 migration/실제 DB와 production standalone을 별도 프로세스로 실행했다. 실제 개인 DB의 이전, 외부 LLM, 공식 CII, 사용자별 화면 어댑터는 수행·완료 범위가 아니다.
 
 ### 2026-10-13 — Docker로 e2e 실행 (macOS, Apple Silicon, PostgreSQL 18.6 이미지)
 
