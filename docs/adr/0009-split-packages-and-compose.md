@@ -1,6 +1,6 @@
 # 0009. frontend·backend를 독립 패키지로 나누고 최상위 docker compose로 함께 실행한다
 
-- 상태: 채택
+- 상태: 채택 — DB 초기화(`db`의 initdb로 `schema.sql` 적용)는 [0010](0010-dbmate-migrations.md)으로 대체
 - 날짜: 2026-10-13
 - 결정자: 윤영채 (프로젝트 구조·협업 담당)
 - 관련: [ADR 0003](0003-sqlite-fts5-local-storage.md)(대체), [ADR 0005](0005-dev-mode-direct-processes.md)(일부 대체), [ADR 0008](0008-maritime-data-tool-boundary.md)(실행 위치 대체), [`../architecture.md`](../architecture.md)

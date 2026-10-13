@@ -1,13 +1,13 @@
 # 데이터 모델
 
-> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-13 (`backend/pyapi/schema.sql`, `backend/pyapi/workspace_store.py`, `backend/maritime_data/schema/schema.sql` 대조)
+> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-13 (`migrations/`, `backend/pyapi/workspace_store.py`, `backend/maritime_data/schema/schema.sql` 대조)
 > 테이블·필드·상태 값을 바꾸면 같은 작업에서 이 문서를 고치고, 되돌리기 어려운 변경이면 ADR을 남깁니다.
 
 ## 1. 저장소 개요
 
 - **엔진**: PostgreSQL(compose 서비스 `db`, `postgres:18-alpine`). FastAPI가 요청마다 `psycopg`로 연결하고 요청 단위 트랜잭션으로 커밋·롤백합니다.
 - **위치**: `DATABASE_URL`. compose에서는 `db` 컨테이너, 데이터는 볼륨 `haedap_db-data`.
-- **스키마**: [`backend/pyapi/schema.sql`](../backend/pyapi/schema.sql). 모든 문장이 멱등(`IF NOT EXISTS`)이며 compose의 `db`가 **빈 볼륨으로 처음 시작할 때** 자동 적용합니다. 이미 만든 DB를 바꾸는 마이그레이션 도구는 아직 없습니다(운영 DB가 생기기 전이므로, 스키마를 바꾸면 로컬 DB는 다시 만듭니다 — 8절).
+- **스키마**: 최상위 [`migrations/`](../migrations/)의 SQL 파일이 원본이고, dbmate가 순서대로 적용합니다([ADR 0010](adr/0010-dbmate-migrations.md)). 적용 이력은 `schema_migrations` 테이블에 있습니다. compose의 `migrate` 서비스가 `docker compose up` 때마다 대기 중인 파일을 적용한 뒤 backend가 시작합니다. 현재 테이블 정의는 [`20261013000000_init.sql`](../migrations/20261013000000_init.sql) 이후 파일들을 차례로 적용한 결과입니다.
 - **JSON `body` 컬럼**: 선박·운항·문서 메타 등은 필드를 `jsonb`로 저장합니다. 검색·정렬에 쓰는 값(`ship`, `date` 등)만 별도 컬럼으로 뺍니다.
 
 ```mermaid
@@ -23,7 +23,7 @@ erDiagram
   users ||--o{ changes : "actor/reviewer"
 ```
 
-(관계선은 논리적 관계입니다. 실제 외래키는 `schema.sql`을 보세요 — 예: `chunks.document_id → documents.id`, `operations.ship → ships.id`.)
+(관계선은 논리적 관계입니다. 실제 외래키는 `migrations/`의 SQL을 보세요 — 예: `chunks.document_id → documents.id`, `operations.ship → ships.id`.)
 
 ## 2. 문서와 검색
 
@@ -159,10 +159,11 @@ erDiagram
 
 ## 8. 스키마를 바꿀 때
 
-1. `backend/pyapi/schema.sql`을 고칩니다. compose의 `db`는 **빈 볼륨일 때만** 이 파일을 실행하므로, 로컬 DB는 `docker compose down -v` 후 다시 올려 새로 만듭니다(데이터 삭제됨).
-2. 아직 지켜야 할 운영 DB가 없어서 마이그레이션 도구를 두지 않았습니다. 운영 데이터가 생기기 전에 마이그레이션 방식(예: Alembic)을 정하고 ADR로 남깁니다.
-3. 백업 대상이면 `BACKUP_TABLES`에 추가하고, 이전 백업 복구 시의 동작을 정합니다(백업 `version`을 올릴지 결정 → ADR).
-4. 이 문서의 해당 절을 갱신하고, `backend/tests/`에 회귀 테스트를, 화면 흐름에 영향이 있으면 e2e를 실행합니다.
+1. 새 마이그레이션 파일을 만듭니다(최상위에서): `docker compose run --rm migrate new add_ship_flag` → `migrations/<시각>_add_ship_flag.sql`.
+2. `-- migrate:up`에 변경을, `-- migrate:down`에 되돌리는 SQL을 씁니다. **이미 커밋된 마이그레이션 파일은 고치지 않고** 항상 새 파일을 추가합니다.
+3. 적용·확인: `docker compose up -d`(자동 적용) 또는 `docker compose run --rm migrate up`, 상태는 `docker compose run --rm migrate status`, 직전 파일 되돌리기는 `docker compose run --rm migrate rollback`.
+4. 백업 대상 테이블이면 `BACKUP_TABLES`에 추가하고, 이전 백업 복구 시의 동작을 정합니다(백업 `version`을 올릴지 결정 → ADR).
+5. 이 문서의 해당 절을 갱신하고, `backend/tests/`에 회귀 테스트를, 화면 흐름에 영향이 있으면 e2e를 실행합니다(e2e 스택도 같은 마이그레이션으로 DB를 만듭니다).
 
 ## 9. PostgreSQL 해사 데이터 Tool (선택)
 

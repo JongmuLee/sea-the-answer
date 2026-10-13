@@ -54,7 +54,8 @@
 | [0006](adr/0006-nextjs-entry-rewrites-to-api.md) | Next.js를 공개 진입점으로, `/api/*`는 rewrites로 내부 API에 전달 | 채택 (일부 0007로 대체) |
 | [0007](adr/0007-runtime-api-origin-via-proxy.md) | `/api/*` 전달 주소를 실행 시점에 결정(`proxy.js`) | 채택 |
 | [0008](adr/0008-maritime-data-tool-boundary.md) | 해사 데이터 Tool의 독립 실행과 내부 API 연결 경계 | 제안 (실행 위치는 0009로 대체) |
-| [0009](adr/0009-split-packages-and-compose.md) | frontend·backend 독립 패키지 + 최상위 docker compose + `e2e/` | 채택 |
+| [0009](adr/0009-split-packages-and-compose.md) | frontend·backend 독립 패키지 + 최상위 docker compose + `e2e/` | 채택 (DB 초기화는 0010으로 대체) |
+| [0010](adr/0010-dbmate-migrations.md) | DB 스키마를 최상위 `migrations/` SQL 파일 + dbmate로 관리 | 채택 |
 
 ## 작성 규칙 요약
 

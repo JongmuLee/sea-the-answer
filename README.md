@@ -22,7 +22,7 @@
 
 ```text
 sea-the-answer/
-├─ compose.yaml          db + backend + frontend (운영), profile "e2e" (테스트 스택)
+├─ compose.yaml          db + migrate + backend + frontend (운영), profile "e2e" (테스트 스택)
 ├─ compose.dev.yaml      개발 오버레이: 소스 마운트, 핫 리로드, DB·API 포트를 127.0.0.1에 공개
 ├─ .env.example          설정 예시 → .env 로 복사
 ├─ frontend/             Next.js 16 + React 19 — 사용자가 접속하는 유일한 진입점   [npm]
@@ -34,10 +34,11 @@ sea-the-answer/
 │  └─ tests/             단위 테스트 (npm test)
 ├─ backend/              FastAPI + PostgreSQL                                       [uv]
 │  ├─ pyproject.toml, uv.lock, .python-version, Dockerfile
-│  ├─ pyapi/             workspace_api.py(라우팅·인증), workspace_store.py(DB·업무 로직), schema.sql
+│  ├─ pyapi/             workspace_api.py(라우팅·인증), workspace_store.py(DB·업무 로직)
 │  ├─ maritime_data/     (선택) 해사 데이터 조회·계산 Tool, 전처리 스크립트
 │  ├─ knowledge/         seed.json(기본 문서), sample-data.json(가상 운항 예시)
 │  └─ tests/             pytest
+├─ migrations/           DB 스키마 마이그레이션 (SQL, up/down)                        [dbmate]
 ├─ e2e/                  Playwright 브라우저 테스트 (화면 → API → DB)                [npm]
 ├─ docs/                 설계·명세·계획·ADR 등 모든 프로젝트 문서
 └─ AGENTS.md             사람·에이전트 공통 작업 지침
@@ -55,7 +56,7 @@ sea-the-answer/
    cp .env.example .env            # Windows PowerShell: Copy-Item .env.example .env
    ```
 
-2. 실행합니다. 처음에는 이미지 빌드로 몇 분 걸립니다. DB 스키마는 자동으로 적용되고, DB가 비어 있으면 기본 문서와 관리자 계정이 만들어집니다.
+2. 실행합니다. 처음에는 이미지 빌드로 몇 분 걸립니다. `migrate` 서비스가 DB 마이그레이션을 적용한 뒤 backend가 시작하고, DB가 비어 있으면 기본 문서와 관리자 계정이 만들어집니다.
 
    ```bash
    docker compose up --build -d
@@ -70,6 +71,7 @@ sea-the-answer/
 | 중지 (데이터 유지) | `docker compose down` |
 | 코드 변경 후 다시 띄우기 | `docker compose up --build -d` |
 | **모든 데이터 삭제** 후 처음부터 | `docker compose down -v` |
+| 마이그레이션 상태 보기 | `docker compose run --rm migrate status` |
 
 데이터는 Docker 볼륨(`haedap_db-data`, 백업 파일은 `haedap_backups`)에 남습니다. 다른 PC·서버에서 접속하게 하려면 `.env`의 `HAEDAP_BIND`·`HAEDAP_ALLOWED_HOSTS`를 설정합니다([사용 안내 7절](docs/user-guide.md#7-같은-네트워크의-팀원이-접속하기--서버에-올리기)). 새 버전으로 바꾸는 방법은 [사용 안내 8절](docs/user-guide.md#8-새-버전으로-바꾸기)에 있습니다.
 
@@ -85,9 +87,12 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ### Docker 없이
 
-PostgreSQL을 직접 준비하거나 DB만 compose로 띄웁니다(`docker compose -f compose.yaml -f compose.dev.yaml up -d db`). 최상위 `.env`에 `DATABASE_URL=postgresql://haedap:<POSTGRES_PASSWORD>@127.0.0.1:5432/haedap`을 넣고 터미널 두 개에서 실행합니다. 직접 만든 DB라면 먼저 `psql "<DATABASE_URL>" -f backend/pyapi/schema.sql`로 스키마를 적용합니다.
+PostgreSQL을 직접 준비하거나 DB만 compose로 띄웁니다(`docker compose -f compose.yaml -f compose.dev.yaml up -d db`). 최상위 `.env`에 `DATABASE_URL=postgresql://haedap:<POSTGRES_PASSWORD>@127.0.0.1:5432/haedap?sslmode=disable`을 넣습니다. 이 값 하나를 dbmate와 backend가 함께 씁니다.
 
 ```bash
+# 마이그레이션 적용 (최상위에서, Node.js 필요 — dbmate가 .env의 DATABASE_URL을 읽음)
+npx --yes dbmate@2.36.0 -d migrations --no-dump-schema up
+
 # 터미널 1 — backend (Python 3.13, uv 필요: https://docs.astral.sh/uv/)
 cd backend
 uv sync
@@ -100,6 +105,19 @@ npm run dev
 ```
 
 새 의존성은 해당 폴더에서만 추가합니다: `cd backend && uv add <패키지>`, `cd frontend && npm install <패키지>`.
+
+### DB 스키마 바꾸기
+
+스키마는 최상위 `migrations/`의 SQL 파일로 관리하고 [dbmate](https://github.com/amacneil/dbmate)로 적용합니다([ADR 0010](docs/adr/0010-dbmate-migrations.md)).
+
+```bash
+docker compose run --rm migrate new add_ship_flag    # migrations/<시각>_add_ship_flag.sql 생성
+# 파일의 -- migrate:up / -- migrate:down 아래에 SQL 작성
+docker compose run --rm migrate up                   # 적용 (docker compose up 때도 자동 적용)
+docker compose run --rm migrate rollback             # 마지막 파일 되돌리기
+```
+
+이미 커밋된 마이그레이션 파일은 고치지 말고 항상 새 파일을 추가합니다. Docker 없이 하려면 `docker compose run --rm migrate` 대신 `npx --yes dbmate@2.36.0 -d migrations --no-dump-schema`를 씁니다. Linux에서 컨테이너로 만든 파일은 root 소유일 수 있으니 필요하면 `sudo chown`으로 바꾸세요.
 
 ## 테스트
 
@@ -123,7 +141,7 @@ Docker 없이 e2e를 돌리려면 **빈 DB로 띄운 스택**에 대고 `e2e/`�
 | `HAEDAP_ALLOWED_HOSTS` | (비움) | localhost 외에 접속에 쓰는 호스트 이름·IP(쉼표 구분) |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | (비움) | 둘 다 넣으면 근거 기반 모델 답변 선택 가능. backend에만 전달 |
 | `MARITIME_DATA_API_TOKEN`, `MARITIME_DATA_DATABASE_URL` | (비움) | 해사 데이터 Tool 라우트(`/api/maritime-data/*`) 활성화 |
-| `DATABASE_URL`, `HAEDAP_API_ORIGIN` | — | Docker 없이 실행할 때만 사용 |
+| `DATABASE_URL`, `HAEDAP_API_ORIGIN` | — | Docker 없이 실행할 때만 사용 (`DATABASE_URL`은 dbmate도 사용) |
 
 ## API
 

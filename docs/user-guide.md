@@ -108,7 +108,7 @@ docker compose up --build -d
 
 `docker compose down -v`는 **볼륨까지 지우므로** 데이터를 지우려는 경우에만 씁니다. 업그레이드 전에는 관리 → 백업·복구에서 백업을 만들고 내려받아 두세요.
 
-**DB 스키마(`backend/pyapi/schema.sql`)가 바뀐 버전이면** 이미 만든 DB에는 자동으로 반영되지 않습니다(DB 초기화 스크립트는 빈 볼륨에서만 실행). 아직 마이그레이션 도구가 없으므로 지금은 `docker compose down -v`로 DB를 지우고 새로 만듭니다. 운영 데이터가 생기기 전에 마이그레이션 방식을 정할 예정입니다([데이터 모델 8절](data-model.md#8-스키마를-바꿀-때)).
+새 버전에 DB 마이그레이션(`migrations/`의 새 파일)이 있으면 `docker compose up` 때 `migrate` 서비스가 자동으로 적용합니다. 적용 결과는 `docker compose logs migrate`, 현재 상태는 `docker compose run --rm migrate status`로 확인합니다. 마이그레이션이 실패하면 그 파일 전체가 롤백되고 backend는 시작하지 않습니다([데이터 모델 8절](data-model.md#8-스키마를-바꿀-때)).
 
 이전 Node/SQLite 버전의 데이터(`backend/data/haedap.sqlite`)를 옮기는 도구는 제공하지 않습니다.
 
@@ -118,7 +118,8 @@ docker compose up --build -d
 |---|---|
 | `docker compose` 명령이 없음 | Docker Desktop(Windows·macOS) 또는 Docker Engine + Compose 플러그인(Ubuntu) 설치 |
 | 화면이 안 열림 | `docker compose ps`로 세 서비스가 `healthy`인지 확인. 아니면 `docker compose logs backend` |
-| `DATA_SOURCE_UNAVAILABLE`, `SCHEMA_NOT_READY` | DB 연결·스키마 문제. compose 밖에서 만든 DB라면 `backend/pyapi/schema.sql` 적용 여부 확인 |
+| `DATA_SOURCE_UNAVAILABLE`, `SCHEMA_NOT_READY` | DB 연결·스키마 문제. `docker compose logs migrate`로 마이그레이션 결과 확인. compose 밖에서 만든 DB라면 `npx --yes dbmate@2.36.0 -d migrations up` 적용 여부 확인 |
+| backend가 시작하지 않음 | `docker compose ps -a`에서 `migrate`가 실패(Exit ≠ 0)했는지 확인 → `docker compose logs migrate` |
 | DB 비밀번호 인증 실패 | 볼륨을 만든 뒤 `POSTGRES_PASSWORD`를 바꾼 경우. 원래 값으로 되돌리거나 DB에서 `ALTER USER` |
 | `HOST_DENIED` (403) | 접속한 주소를 `.env`의 `HAEDAP_ALLOWED_HOSTS`에 추가 후 `docker compose up -d` |
 | 포트 사용 중 | `.env`의 `PORT`(공개 포트)를 바꿈. 개발 오버레이의 5432·8000이 겹치면 `POSTGRES_PORT`를 바꾸거나 해당 프로그램 종료 |

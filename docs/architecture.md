@@ -5,7 +5,7 @@
 
 ## 1. 한눈에 보기
 
-해답은 서비스 세 개로 이루어진 웹 애플리케이션입니다. 사용자는 **Next.js 주소 하나**(기본 `http://localhost:5173`)로만 접속합니다. Next.js가 화면을 그리고, `/api/*` 요청은 `proxy.js`가 FastAPI 백엔드로 넘깁니다([ADR 0006](adr/0006-nextjs-entry-rewrites-to-api.md), [ADR 0007](adr/0007-runtime-api-origin-via-proxy.md)). 백엔드만 PostgreSQL에 접근합니다.
+해답은 서비스 세 개(+ 시작 때 한 번 도는 마이그레이션)로 이루어진 웹 애플리케이션입니다. 사용자는 **Next.js 주소 하나**(기본 `http://localhost:5173`)로만 접속합니다. Next.js가 화면을 그리고, `/api/*` 요청은 `proxy.js`가 FastAPI 백엔드로 넘깁니다([ADR 0006](adr/0006-nextjs-entry-rewrites-to-api.md), [ADR 0007](adr/0007-runtime-api-origin-via-proxy.md)). 백엔드만 PostgreSQL에 접근합니다.
 
 `frontend/`(npm)와 `backend/`(uv)는 각각 독립된 패키지이고, 저장소 최상위의 `compose.yaml`이 셋을 함께 띄웁니다. 최상위 `e2e/`는 실행 중인 스택을 브라우저로 검증합니다([ADR 0009](adr/0009-split-packages-and-compose.md)).
 
@@ -16,7 +16,9 @@ flowchart LR
     N[frontend<br/>Next.js :5173<br/>유일하게 공개되는 포트]
     G[backend<br/>FastAPI :8000<br/>pyapi.workspace_api]
     D[(db<br/>PostgreSQL 18<br/>볼륨 db-data)]
+    M[migrate<br/>dbmate · migrations/<br/>시작 때 1회]
     K[/백업 파일<br/>볼륨 backups/]
+    M -->|대기 중인 마이그레이션 적용| D
     N -->|/api/* proxy.js<br/>X-Forwarded-Host| G
     G --> D
     G --> K
@@ -27,12 +29,13 @@ flowchart LR
 
 | 서비스 | 이미지(빌드 위치) | 포트 | 데이터 |
 |---|---|---|---|
-| `db` | `postgres:18-alpine` | 내부 5432 (개발 오버레이에서만 `127.0.0.1:5432` 공개) | 볼륨 `db-data`. 첫 시작 때 `backend/pyapi/schema.sql` 적용 |
+| `db` | `postgres:18-alpine` | 내부 5432 (개발 오버레이에서만 `127.0.0.1:5432` 공개) | 볼륨 `db-data` |
+| `migrate` | `amacneil/dbmate:2.36.0` | 없음 | 최상위 `migrations/` 마운트. `up` 후 종료([ADR 0010](adr/0010-dbmate-migrations.md)) |
 | `backend` | `backend/Dockerfile` (`prod`/`dev` 타깃) | 내부 8000 (개발 오버레이에서만 `127.0.0.1:8000` 공개) | 볼륨 `backups` → `/data/backups` |
 | `frontend` | `frontend/Dockerfile` (`prod`=standalone, `dev`=`next dev`) | `${HAEDAP_BIND:-127.0.0.1}:${PORT:-5173}` | 없음 |
-| `e2e-*`, `e2e` | 같은 Dockerfile + `e2e/Dockerfile` | 공개 안 함 | DB·백업 모두 tmpfs (실행마다 빈 상태) |
+| `e2e-*`, `e2e` | 같은 이미지·Dockerfile + `e2e/Dockerfile` | 공개 안 함 | DB·백업 모두 tmpfs (실행마다 빈 상태, `e2e-migrate`로 같은 마이그레이션 적용) |
 
-- **운영 실행**: `docker compose up --build -d`. 각 서비스는 헬스체크가 통과해야 다음 서비스가 시작합니다(db → backend → frontend). backend 헬스체크는 `/api/health`를 호출하므로 DB 연결까지 확인합니다.
+- **운영 실행**: `docker compose up --build -d`. 시작 순서는 db(헬스체크 통과) → migrate(성공 종료) → backend(헬스체크 통과) → frontend입니다. 마이그레이션이 실패하면 backend가 시작하지 않습니다. backend 헬스체크는 `/api/health`를 호출하므로 DB 연결까지 확인합니다.
 - **개발 실행**: `docker compose -f compose.yaml -f compose.dev.yaml up --build`. 소스를 컨테이너에 바인드 마운트하고 `uvicorn --reload`, `next dev`로 저장 즉시 반영합니다. Docker 없이 `backend/`에서 `uv run`, `frontend/`에서 `npm run dev`로 직접 실행하는 방법도 유지합니다([ADR 0005](adr/0005-dev-mode-direct-processes.md)).
 - **API 주소**: `HAEDAP_API_ORIGIN`. compose에서는 `http://backend:8000`, 직접 실행에서는 기본 `http://127.0.0.1:8000`. `proxy.js`가 **요청마다** 이 값을 읽으므로 바꿔도 다시 빌드할 필요가 없습니다. 직접 실행할 때는 `next.config.mjs`가 이 값 하나만 최상위 `.env`에서 읽습니다.
 - `next.config.mjs`는 `output: 'standalone'`으로 빌드하고, `next dev`는 `.next-dev`, 그 외에는 `.next`를 출력 폴더로 씁니다(`HAEDAP_NEXT_DIST`로 덮어쓰기 가능).
@@ -90,10 +93,11 @@ sequenceDiagram
 |---|---|
 | `pyapi/workspace_api.py` | FastAPI 앱, `/api/{path}` 라우팅, 세션·게스트 쿠키, CSRF, Host·Origin 검사, 본문 크기 제한, 동시성·복구 잠금, 자동 백업 루프, 오류 응답, 해사 데이터 라우터 마운트 |
 | `pyapi/workspace_store.py` | `Workspace`: PostgreSQL 접근, 인증, 권한, 문서 등록·청크(900자)·검색, 선박·운항 변경, 보고서·초안 생성, 계산 도구, 통합 답변·선택적 LLM, 감사 로그, 백업·복구 |
-| `pyapi/schema.sql` | PostgreSQL 스키마(멱등). compose의 `db`가 첫 시작 때 적용 |
 | `knowledge/seed.json`, `knowledge/sample-data.json` | 기본 문서, "예시 데이터 넣기"용 가상 운항 기록 |
 | `maritime_data/` | 해사 데이터 조회·계산 Tool(8절). `scripts/`는 오프라인 전처리(`uv sync --group data`) |
 | `tests/`, `maritime_data/tests/` | pytest (`backend/`에서 `uv run pytest`) |
+
+DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유합니다. backend는 테이블이 없으면 `SCHEMA_NOT_READY`(503)를 반환합니다.
 
 `frontend/tests/`는 CSV·PDF 유틸 단위 테스트(`npm test`), 최상위 `e2e/tests/`는 화면 → API → DB 전체 흐름 검증(Playwright)입니다.
 
@@ -135,6 +139,7 @@ sequenceDiagram
 | 볼륨 `haedap_db-data`, `haedap_backups` | `docker compose up` | — (`docker compose down -v`로 삭제됨) |
 | `backend/data/` | 직접 실행 시 백업(`data/backups/`) | 제외 |
 | `e2e/test-results/`, `e2e/playwright-report/` | e2e 실행 | 제외 |
+| `schema_migrations` 테이블 | dbmate (적용한 마이그레이션 버전) | — |
 | `.env` | 사용자가 직접 | 제외 |
 
 ## 7. 알려진 한계

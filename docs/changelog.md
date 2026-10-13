@@ -4,6 +4,7 @@
 
 ## 변경 이력
 
+- **DB 마이그레이션 도입 / 2026-10-13** (버전 유지, [ADR 0010](adr/0010-dbmate-migrations.md)): 앱 스키마를 최상위 `migrations/`의 SQL 파일(dbmate, up/down)로 관리. `backend/pyapi/schema.sql`을 첫 마이그레이션 `20261013000000_init.sql`로 옮기고 삭제. compose에 일회성 `migrate`·`e2e-migrate` 서비스(`amacneil/dbmate:2.36.0`)를 추가해 backend보다 먼저 적용하고, db 컨테이너의 initdb 스크립트 마운트 제거.
 - **패키지 분리·docker compose·e2e / 2026-10-13** (버전 유지, [ADR 0009](adr/0009-split-packages-and-compose.md)): `package.json`·lockfile을 `frontend/`로 옮기고(Playwright 제거), `backend/`를 자체 uv 프로젝트로 정리(Python 3.12~3.13, `pyapi`·`maritime_data`를 `backend/`에서 바로 import). 최상위에 `compose.yaml`(db·backend·frontend, profile `e2e`), `compose.dev.yaml`(소스 마운트·핫 리로드), 서비스별 `Dockerfile`(prod·dev 타깃), 최상위 `e2e/`(Playwright Test, 기존 `scripts/next-browser-smoke.mjs` 시나리오 14단계 이식) 추가. 쓰이지 않던 Node/SQLite 백엔드(`backend/*.mjs`와 테스트)와 `scripts/` 전체(실행기·Windows 실행기·SQLite 점검·JSON 수집) 제거, 예시 운항 데이터를 `backend/knowledge/sample-data.json`으로 변환. SQLite → PostgreSQL 이전 도구 `pyapi/migrate_sqlite.py` 제거(만든 PostgreSQL DB가 없고, 로컬 SQLite에도 테스트 흔적만 있어 옮길 데이터 없음). `maritime_data`의 별도 `pyproject.toml`·requirements를 backend로 통합하고 `MARITIME_DATA_API_TOKEN`이 있으면 `/api/maritime-data/*`를 같은 앱에 마운트. Next.js는 `output: 'standalone'`.
 - **버그 수정 / 2026-10-13** (e2e로 발견): ① 선박 목록이 `ORDER BY id`라 UUID로 등록한 선박이 임의 위치에 끼어 화면의 기본 선박이 바뀌던 문제 — `ships.seq`(identity, 등록 순서) 추가. ② LAN·서버 IP로 `http://` 접속 시 `crypto.randomUUID`가 없어 문서 등록이 실패하던 문제 — `frontend/src/lib/id.js`에서 `getRandomValues` 대체 경로 사용.
 - **FastAPI 이전 / 2026-10-09~10** (PR #7): 기존 `/api/*`를 FastAPI·PostgreSQL로 이전, SQLite 일회성 이전 도구, uv 잠금 파일 추가. (이 항목은 2026-10-13에 소급 기록)
@@ -23,6 +24,19 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-13 — dbmate 마이그레이션
+
+환경: 위 기록과 같은 Linux 작업 공간, dbmate 2.36.0(npm), PostgreSQL 16. Docker 데몬이 없어 `amacneil/dbmate` 이미지로 실행하는 `migrate` 서비스 자체는 실행하지 못했습니다.
+
+| 검증 | 결과 |
+|---|---|
+| `docker compose config -q` (운영, 운영+개발, `--profile e2e`) | 3개 통과. backend → `migrate`(`service_completed_successfully`) 의존 확인 |
+| 빈 DB에 `dbmate up` → `status` → 다시 `up` → `rollback` → `up` | 적용 1건, 재실행은 변화 없음, rollback 후 앱 테이블 0개(`schema_migrations`만 남음), 재적용 정상 |
+| 일부러 실패하는 마이그레이션 | 종료 코드 2, 그 파일의 테이블 생성까지 롤백, 이력에 기록 안 됨 |
+| `postgresql://…?sslmode=disable` 하나를 dbmate·psycopg가 공유 | 둘 다 연결 성공 |
+| `backend/`: `uv run pytest` | 57 통과, 4 건너뜀 |
+| dbmate로 만든 DB에서 e2e (`127.0.0.1`, `e2e-frontend` 두 조건) | 둘 다 14단계 통과 |
 
 ### 2026-10-13 — 패키지 분리·docker compose·e2e
 
