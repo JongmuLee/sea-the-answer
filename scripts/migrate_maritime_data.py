@@ -58,7 +58,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true', help='Apply the schema/settings rename')
     args = parser.parse_args()
-    config = Path(__file__).resolve().parents[2] / '.env.local'
+    config = Path(__file__).resolve().parents[1] / '.env.local'
     source = config.read_text(encoding='utf-8') if config.exists() else ''
     settings = migrate_settings(source)  # Check conflicts before touching the DB.
     load_dotenv(config, override=False)

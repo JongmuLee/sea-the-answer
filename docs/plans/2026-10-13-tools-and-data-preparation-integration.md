@@ -3,7 +3,7 @@
 - 상태: 완료
 - 작성: 2026-10-13 · 역할4
 - 담당: 손태호 (역할4) · 팀 리뷰 후 통합
-- 관련: [ADR 0011 제안](../adr/0011-maritime-backend-integration.md), [데이터 모델](../data-model.md#9-postgresql-해사-데이터-tool-선택), [API 계약](../specs/maritime-data-api.md), [데이터 계약](../specs/maritime-data.md)
+- 관련: [ADR 0011 제안](../adr/0011-tools-runtime-and-data-preparation.md), [데이터 모델](../data-model.md#9-postgresql-해사-데이터-tool-선택), [API 계약](../specs/tools.md), [데이터 계약](../specs/prepare-data.md)
 
 ## 목표와 범위
 
@@ -35,7 +35,7 @@ backend pytest, 준비 스크립트 테스트, 임시 PostgreSQL의 fresh/legacy
 | 영역 | 변경 |
 |---|---|
 | `backend/tools/`, `backend/api/main.py` | 실행 Tool 경로·마운트 import |
-| `scripts/maritime_data/` | 오프라인 준비·적재·사전·설정 보조·선박 매핑 |
+| `scripts/` | 오프라인 준비·적재·사전·설정 보조·선박 매핑 |
 | `migrations/` | 새 해사 DDL·기존 스키마 채택·선박 FK |
 | `backend/api/store/backups.py` | 앱 복구 시 현재 해사 선박 연결 보존·검증 |
 | backend 의존성·Docker·테스트 | runtime과 data 그룹·경로 정합성 |
@@ -62,3 +62,5 @@ backend pytest, 준비 스크립트 테스트, 임시 PostgreSQL의 fresh/legacy
 - 2026-10-13: 최종 backend 134개(실 DB 생략 0), frontend 4개·빌드, 깨끗한 Chromium 16단계 검증을 기록하고 [팀 PR #9](https://github.com/dudco/sea-the-answer/pull/9)를 제출했다. 기준은 PR #8의 refactor/split-packages이며, 팀 main 병합은 수행하지 않았다.
 
 - 2026-10-13 최종 점검: 적재와 복구의 잠금 충돌을 재현해 5초 제한·409 BUSY·데이터 보존 회귀를 추가했다. 최종 backend 135개(실 DB 생략 0) 및 Chromium 16단계가 통과했고 PR #9에 보완했다.
+
+- 2026-10-13 추가 팀 피드백: `backend/tools/`와 `scripts/` 바로 아래로 소스를 정리하고 specs·ADR·계획 문서의 파일명을 용도별로 명확히 변경했다. import, CLI의 기본 저장소 경로, 실행 예제와 색인을 함께 갱신한다.

@@ -17,7 +17,7 @@ from psycopg.conninfo import make_conninfo
 from psycopg.types.json import Jsonb
 import pytest
 
-from scripts.maritime_data.prepare_maritime_data import FIELDS
+from scripts.prepare_maritime_data import FIELDS
 
 
 ROOT = Path(__file__).resolve().parents[2]

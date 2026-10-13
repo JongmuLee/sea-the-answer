@@ -7,8 +7,8 @@ import psycopg
 from psycopg.types.json import Jsonb
 import pytest
 
-from scripts.maritime_data.load_data import load_prepared, prepared_files, TABLES
-from scripts.maritime_data.prepare_maritime_data import FIELDS
+from scripts.load_data import load_prepared, prepared_files, TABLES
+from scripts.prepare_maritime_data import FIELDS
 from test_maritime_migrations import postgres_dsn, apply_initial, apply_maritime
 
 

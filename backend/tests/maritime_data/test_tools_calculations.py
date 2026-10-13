@@ -3,9 +3,9 @@ from decimal import Decimal as D
 import pytest
 from pydantic import ValidationError
 from fastapi.testclient import TestClient
-from tools.maritime_data import calculations as calc
+from tools import calculations as calc
 from .api_support import app, login
-from .test_maritime_data import pg_engine
+from .test_tools_query import pg_engine
 
 SCOPE={'dataset':'synthetic_noon','vessel_id':'SYN:SIM-BULK-01','start':'2025-01-01','end':'2025-01-02'}
 MAPS=[{'fuel_label':'VLSFO','category':'HFO','evidence':'Development test assumption, not certified fuel mapping'},

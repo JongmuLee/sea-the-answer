@@ -7,7 +7,7 @@ import pytest
 
 from api.store import Workspace
 from api.errors import ApiError
-from scripts.maritime_data import link_ship as cli
+from scripts import link_ship as cli
 from test_maritime_restore_links import ADMIN, add_link, add_ship, maritime_table, postgres_dsn, ship
 
 

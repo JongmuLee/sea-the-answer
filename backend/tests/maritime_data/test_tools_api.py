@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
-from tools.maritime_data.api import create_app
-from tools.maritime_data import query as maritime_data, calculations as maritime_data_calculations
+from tools.api import create_app
+from tools import query as maritime_data, calculations as maritime_data_calculations
 from .api_support import app, login, TOKEN
 
 QUERY = {'dataset': 'real_annual', 'year_start': 2020, 'year_end': 2025}

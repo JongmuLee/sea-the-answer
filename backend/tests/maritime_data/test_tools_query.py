@@ -9,7 +9,7 @@ from sqlalchemy.exc import OperationalError
 from fastapi import HTTPException
 from unittest.mock import MagicMock
 
-from tools.maritime_data import query as maritime_data
+from tools import query as maritime_data
 from .api_support import app, login
 
 

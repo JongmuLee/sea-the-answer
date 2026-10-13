@@ -1,12 +1,12 @@
-# 해사 데이터 API 계약
+# Python Tool 호출·조회·계산 API 계약 v1
 
 - 상태: 구현됨
 - 작성: 역할4 · 2026-10-08 (기존 2026-10-05 독립 Tool 계약의 문서 위치 정리)
-- 관련: [데이터 명세](maritime-data.md), [운영 안내](../user-guide.md#10-해사-데이터-tool-선택), [통합 ADR 제안](../adr/0011-maritime-backend-integration.md), [통합 계획](../plans/2026-10-13-maritime-backend-integration.md)
+- 관련: [데이터 명세](prepare-data.md), [운영 안내](../user-guide.md#10-해사-데이터-tool-선택), [통합 ADR 제안](../adr/0011-tools-runtime-and-data-preparation.md), [통합 계획](../plans/2026-10-13-tools-and-data-preparation-integration.md)
 
 ## 목적과 범위
 
-PostgreSQL 해사 데이터를 읽는 `backend/tools/maritime_data/`의 요청·응답·오류·산술 범위를 정의합니다. `MARITIME_DATA_API_TOKEN`이 설정되면 앱 backend(FastAPI)에 `/api/maritime-data/*`로 함께 마운트되고([ADR 0009](../adr/0009-split-packages-and-compose.md)), 독립 앱(`create_app`)으로도 실행할 수 있습니다. Tool 경로·요청·응답은 두 방식이 같습니다. [앱 API](api.md)와 달리 서버 전용 Bearer 토큰을 씁니다. DB의 선택적 `vessels.ship_id` 연결과 오프라인 명시 매핑은 제공하지만, 앱 선박 ID를 Tool 입력으로 자동 변환하는 화면 어댑터·사용자 접근 정책·영구 감사 통합 및 LLM 연결은 아직 구현되지 않았습니다.
+PostgreSQL 해사 데이터를 읽는 `backend/tools/`의 요청·응답·오류·산술 범위를 정의합니다. `MARITIME_DATA_API_TOKEN`이 설정되면 앱 backend(FastAPI)에 `/api/maritime-data/*`로 함께 마운트되고([ADR 0009](../adr/0009-split-packages-and-compose.md)), 독립 앱(`create_app`)으로도 실행할 수 있습니다. Tool 경로·요청·응답은 두 방식이 같습니다. [앱 API](api.md)와 달리 서버 전용 Bearer 토큰을 씁니다. DB의 선택적 `vessels.ship_id` 연결과 오프라인 명시 매핑은 제공하지만, 앱 선박 ID를 Tool 입력으로 자동 변환하는 화면 어댑터·사용자 접근 정책·영구 감사 통합 및 LLM 연결은 아직 구현되지 않았습니다.
 
 | 메서드·경로 | 역할 | Bearer 토큰 |
 |---|---|---|
@@ -26,7 +26,7 @@ PostgreSQL 해사 데이터를 읽는 `backend/tools/maritime_data/`의 요청·
 
 일반 실행은 앱 backend(`http://127.0.0.1:8000`, 운영 compose에서는 내부 주소)에 마운트합니다. 독립 도구 실행 예제는 `http://127.0.0.1:8001`입니다. 모든 Tool 요청에 `Authorization: Bearer <MARITIME_DATA_API_TOKEN>`이 필요합니다. 설정은 서버 환경변수에 두며, 앱 실행은 최상위 `.env`, 이전 도구 환경의 `.env.local`은 운영 안내의 호환 절차를 따릅니다. Tool 자체는 앱 로그인 세션·CSRF로 인증하지 않습니다. 실행 예제는 [운영 안내](../user-guide.md#10-해사-데이터-tool-선택)를 참고하세요.
 
-backend 실행 환경의 내부 Python 진입점은 `tools.maritime_data.query.query(engine, body)`입니다. 팀 앱에 직접 연결할 때는 호출자가 사용자 권한을 검사해야 합니다. `/api/maritime-data/ask`는 고정 scope의 규칙 기반 조회 도우미이며 LLM 연결은 포함하지 않습니다.
+backend 실행 환경의 내부 Python 진입점은 `tools.query.query(engine, body)`입니다. 팀 앱에 직접 연결할 때는 호출자가 사용자 권한을 검사해야 합니다. `/api/maritime-data/ask`는 고정 scope의 규칙 기반 조회 도우미이며 LLM 연결은 포함하지 않습니다.
 
 ### 입력
 

@@ -71,7 +71,7 @@ def main(argv=None) -> int:
     parser.add_argument("--ship-id", required=True)
     parser.add_argument("--apply", action="store_true", help="Apply the link (default: preview only)")
     parser.add_argument("--confirm-synthetic", action="store_true", help="Confirm a development-only synthetic mapping")
-    parser.add_argument("--env-file", type=Path, default=Path(__file__).resolve().parents[2] / ".env")
+    parser.add_argument("--env-file", type=Path, default=Path(__file__).resolve().parents[1] / ".env")
     args = parser.parse_args(argv)
     try:
         load_dotenv(args.env_file, override=False)

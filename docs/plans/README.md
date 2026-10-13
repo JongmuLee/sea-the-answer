@@ -15,6 +15,6 @@
 | 문서 | 내용 | 상태 |
 |---|---|---|
 | [`2026-10-08-team-module-integration.md`](2026-10-08-team-module-integration.md) | RAG·LLM·Tool·문서 형식 등 팀 모듈 연결 로드맵 | 초안 |
-| [`2026-10-08-maritime-data-docs-alignment.md`](2026-10-08-maritime-data-docs-alignment.md) | 역할4 PR 문서·모듈 구조 정리 | 완료 |
-| [`2026-10-08-maritime-data-pr-update.md`](2026-10-08-maritime-data-pr-update.md) | 역할4 PR 최신 main 반영 및 제출 | 완료 |
-| [`2026-10-13-maritime-backend-integration.md`](2026-10-13-maritime-backend-integration.md) | 해사 runtime·준비 작업·마이그레이션·선박 연결 통합 | 완료 |
+| [`2026-10-08-tools-and-data-preparation-docs.md`](2026-10-08-tools-and-data-preparation-docs.md) | 역할4 PR 문서·모듈 구조 정리 | 완료 |
+| [`2026-10-08-tools-pr-update.md`](2026-10-08-tools-pr-update.md) | 역할4 PR 최신 main 반영 및 제출 | 완료 |
+| [`2026-10-13-tools-and-data-preparation-integration.md`](2026-10-13-tools-and-data-preparation-integration.md) | 해사 runtime·준비 작업·마이그레이션·선박 연결 통합 | 완료 |

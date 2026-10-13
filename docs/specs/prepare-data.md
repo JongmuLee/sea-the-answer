@@ -1,14 +1,22 @@
-# 해사 데이터 선택·품질 계약 v1
+# 사전 데이터 수집·전처리·적재 계약 v1
 
 - 상태: 구현됨
 - 작성: 역할4 · 2026-10-08 (기존 2026-09-30 계약의 문서 위치 정리)
-- 관련: [API 명세](maritime-data-api.md), [데이터 모델](../data-model.md#9-postgresql-해사-데이터-tool-선택), [운영 안내](../user-guide.md#10-해사-데이터-tool-선택), [통합 계획](../plans/2026-10-13-maritime-backend-integration.md), [ADR 0011 제안](../adr/0011-maritime-backend-integration.md)
+- 관련: [API 명세](tools.md), [데이터 모델](../data-model.md#9-postgresql-해사-데이터-tool-선택), [운영 안내](../user-guide.md#10-해사-데이터-tool-선택), [통합 계획](../plans/2026-10-13-tools-and-data-preparation-integration.md), [ADR 0011 제안](../adr/0011-tools-runtime-and-data-preparation.md)
 
 ## 목적과 범위
 
-원본을 실제 MRV·개발용 합성 Noon·참조 자료로 구분하고, 전처리 결과의 식별자·출처·결측·품질 및 집계 가능 여부를 정의합니다. 구현 기준은 `scripts/maritime_data/prepare_maritime_data.py`입니다. PostgreSQL 테이블·컬럼·제약·ERD는 데이터 모델에 한 번만 정의합니다.
+원본을 실제 MRV·개발용 합성 Noon·참조 자료로 구분하고, 전처리 결과의 식별자·출처·결측·품질 및 집계 가능 여부를 정의합니다. 구현 기준은 `scripts/prepare_maritime_data.py`입니다. PostgreSQL 테이블·컬럼·제약·ERD는 데이터 모델에 한 번만 정의합니다.
 
 항구 자동 매핑, 공개 제원 후보의 법정 검증값 승격, 공식 CII 입력 확보·등급 산정, 팀 앱 테이블 교체는 포함하지 않습니다. CO₂ Tool이 사용하는 고정 계수 부분집합은 API 명세에 정의되어 있으며 최신 규정 전체의 구현을 뜻하지 않습니다.
+
+## 사전 자료 확보와 처리 책임
+
+- 원본 MRV·Synthetic Noon 파일과 공개 참조 자료는 이용조건·접근 권한을 확인한 뒤 별도로 확보합니다. 서버 시작이나 마이그레이션이 자동 다운로드하지 않습니다.
+- `scripts/prepare_maritime_data.py`: 확보한 원본을 실제·합성으로 분리하여 CSV·출처·품질정보를 생성합니다.
+- `scripts/prepare_gisis_eedi.py`, `scripts/prepare_open_cii_references.py`: 확보한 GISIS EEDI·공개 참조 자료를 별도 참조 데이터로 정규화합니다. 운영 데이터로 자동 합치지 않습니다.
+- `scripts/load_data.py`: 마이그레이션이 적용된 빈 테이블에 전처리 결과를 적재합니다. `scripts/link_ship.py`는 검토한 앱 선박 연결만 적용합니다.
+- 입력 파일의 위치·출처·이용조건과 실행 명령은 [운영 안내](../user-guide.md#10-해사-데이터-tool-선택)를 따릅니다. 실행 중 Tool 호출 계약은 [tools.md](tools.md)에서 관리합니다.
 
 ## 용도와 경계
 
@@ -34,11 +42,11 @@
 
 출력 폴더에는 `source_files.csv`, `vessels.csv`, `annual_reports.csv`, `synthetic_noon.csv`, `synthetic_voyages.csv`, `quality_issues.csv` 및 `summary.json`, `raw_records.jsonl`을 보존합니다. CSV의 빈 셀은 적재 시 NULL로 해석하고 JSON 컬럼은 JSONB로 적재합니다. 원본 버전·출처와 요약은 데이터와 함께 전달하며 저장소에 원본을 재배포하지 않습니다.
 
-DDL의 유일한 원본은 루트 `migrations/20261013010000_maritime_data.sql`입니다. `scripts/maritime_data/describe_maritime_data.py`는 전처리 `FIELDS`의 기계용 필드 사전만 생성하고 DDL·마이그레이션·수동 명세·ERD는 덮어쓰지 않습니다. 전처리 CSV의 `vessels`에는 원본 필드만 담고 관리용 nullable `ship_id`는 적재 후 별도 명시 매핑으로 연결합니다. 원본 파일명과 참고자료의 확보 범위는 운영 안내에서 관리합니다.
+DDL의 유일한 원본은 루트 `migrations/20261013010000_maritime_data.sql`입니다. `scripts/describe_maritime_data.py`는 전처리 `FIELDS`의 기계용 필드 사전만 생성하고 DDL·마이그레이션·수동 명세·ERD는 덮어쓰지 않습니다. 전처리 CSV의 `vessels`에는 원본 필드만 담고 관리용 nullable `ship_id`는 적재 후 별도 명시 매핑으로 연결합니다. 원본 파일명과 참고자료의 확보 범위는 운영 안내에서 관리합니다.
 
 ## 적재 전 확인
 
-마이그레이션을 먼저 적용하여 앱과 같은 DB에 `maritime_data` 테이블을 준비합니다. 별도 DB를 선택한 경우에도 기본 init과 해사 마이그레이션을 모두 적용해야 합니다. 이전 단일 스키마는 구조 검증 후 채택하며 양쪽 스키마 충돌은 거절합니다. CSV loader는 기본 미리보기에서 DB에 연결하지 않고 `--apply`에서만 migration 이력과 빈 대상 테이블을 확인합니다. DDL은 실행하지 않으며 실패 시 전체 롤백합니다. 마이그레이션 자체는 원본을 확보하거나 CSV를 적재하지 않습니다. 기존 앱 화면·Agent는 이를 자동 조회하지 않습니다. 조회 계약은 [API 명세](maritime-data-api.md), 실행·기존 적재 기록은 [운영 안내](../user-guide.md#10-해사-데이터-tool-선택)를 확인하세요.
+마이그레이션을 먼저 적용하여 앱과 같은 DB에 `maritime_data` 테이블을 준비합니다. 별도 DB를 선택한 경우에도 기본 init과 해사 마이그레이션을 모두 적용해야 합니다. 이전 단일 스키마는 구조 검증 후 채택하며 양쪽 스키마 충돌은 거절합니다. CSV loader는 기본 미리보기에서 DB에 연결하지 않고 `--apply`에서만 migration 이력과 빈 대상 테이블을 확인합니다. DDL은 실행하지 않으며 실패 시 전체 롤백합니다. 마이그레이션 자체는 원본을 확보하거나 CSV를 적재하지 않습니다. 기존 앱 화면·Agent는 이를 자동 조회하지 않습니다. 조회 계약은 [API 명세](tools.md), 실행·기존 적재 기록은 [운영 안내](../user-guide.md#10-해사-데이터-tool-선택)를 확인하세요.
 정상·검토 레코드와 거절 레코드의 적재 경로를 나누고 필수값이 없는 REJECT는 원본/이슈 저장소에만 보관하세요. INSERT 시 숫자·날짜를 파싱하고 JSON 필드는 JSONB로 적재합니다. 원본 판정 충족률을 공식 CII 준비율로 사용하지 않습니다.
 
 ## 수용 기준

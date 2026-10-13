@@ -13,6 +13,6 @@ def generate(out):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[2] / "output/maritime-data-contract")
+    parser.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[1] / "output/maritime-data-contract")
     args = parser.parse_args()
     generate(args.out)

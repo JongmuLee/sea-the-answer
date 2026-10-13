@@ -1,6 +1,6 @@
 import unittest
 from decimal import Decimal
-from scripts.maritime_data.prepare_maritime_data import number,period,resolve_hours,text
+from scripts.prepare_maritime_data import number,period,resolve_hours,text
 
 class PreparationTests(unittest.TestCase):
     def test_missing_is_not_zero(self):

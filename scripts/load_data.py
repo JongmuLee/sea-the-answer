@@ -114,7 +114,7 @@ def load_prepared(dsn: str, directory: Path, *, apply: bool = False) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, required=True)
-    parser.add_argument("--env-file", type=Path, default=Path(__file__).resolve().parents[2] / ".env")
+    parser.add_argument("--env-file", type=Path, default=Path(__file__).resolve().parents[1] / ".env")
     parser.add_argument("--apply", action="store_true", help="Write only to empty, migrated maritime tables")
     args = parser.parse_args()
     load_dotenv(args.env_file, override=False)

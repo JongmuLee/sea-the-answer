@@ -3,7 +3,7 @@
 - 상태: 제안 — 이번 PR의 구현 기준이며 팀 병합 승인 후 채택
 - 날짜: 2026-10-13
 - 제안자: 손태호 (역할4)
-- 관련: [ADR 0009](0009-split-packages-and-compose.md)(오프라인 `scripts/` 예외), [ADR 0010](0010-dbmate-migrations.md)(해사 스키마 범위 확장), [통합 계획](../plans/2026-10-13-maritime-backend-integration.md)
+- 관련: [ADR 0009](0009-split-packages-and-compose.md)(오프라인 `scripts/` 예외), [ADR 0010](0010-dbmate-migrations.md)(해사 스키마 범위 확장), [통합 계획](../plans/2026-10-13-tools-and-data-preparation-integration.md)
 
 ## 배경
 
@@ -11,7 +11,7 @@
 
 ## 제안 결정
 
-- 런타임은 `backend/tools/maritime_data/`, 다운로드 자료의 정규화·전처리·필드 사전 생성·CSV 적재·이전 환경 보조 작업은 `scripts/maritime_data/`에 둔다. `scripts/`는 오프라인 자료 준비용 최상위 소스 폴더의 예외다. 독립 패키지 매니저는 추가하지 않고 backend uv 환경과 선택 `data` 의존성 그룹을 사용한다.
+- 런타임은 `backend/tools/`, 다운로드 자료의 정규화·전처리·필드 사전 생성·CSV 적재·이전 환경 보조 작업은 `scripts/`에 둔다. `scripts/`는 오프라인 자료 준비용 최상위 소스 폴더의 예외다. 독립 패키지 매니저는 추가하지 않고 backend uv 환경과 선택 `data` 의존성 그룹을 사용한다.
 - 기존 init 파일은 수정하지 않는다. 새 `migrations/20261013010000_maritime_data.sql`이 6개 해사 테이블과 2개 승인 View를 만든다. loader는 DDL을 실행하지 않고 이미 마이그레이션이 끝난 빈 테이블에만 한 트랜잭션으로 적재한다.
 - 기본은 앱과 같은 `DATABASE_URL`이다. 별도 `MARITIME_DATA_DATABASE_URL`을 사용할 때도 해당 DB에 기본 앱 init과 해사 마이그레이션을 모두 적용한다. DB를 넘는 외래키는 지원하지 않는다.
 - `maritime_data.vessels.ship_id`를 nullable 외래키로 두어 기존 `public.ships.id`를 재사용한다(`ON DELETE SET NULL`). 원본 `vessel_id`와 REAL/SYN 구분은 바꾸지 않는다. 검토한 명시적 매핑만 연결하고, 이름으로 자동 결합하거나 MRV 선박 전체를 앱 `ships`에 자동 생성하지 않는다. 연간 MRV를 일별 `operations`로 분해하지 않는다.
