@@ -4,6 +4,9 @@
 
 ## 변경 이력
 
+- **패키지 분리·docker compose·e2e / 2026-10-13** (버전 유지, [ADR 0009](adr/0009-split-packages-and-compose.md)): `package.json`·lockfile을 `frontend/`로 옮기고(Playwright 제거), `backend/`를 자체 uv 프로젝트로 정리(Python 3.12~3.13, `pyapi`·`maritime_data`를 `backend/`에서 바로 import). 최상위에 `compose.yaml`(db·backend·frontend, profile `e2e`), `compose.dev.yaml`(소스 마운트·핫 리로드), 서비스별 `Dockerfile`(prod·dev 타깃), 최상위 `e2e/`(Playwright Test, 기존 `scripts/next-browser-smoke.mjs` 시나리오 14단계 이식) 추가. 쓰이지 않던 Node/SQLite 백엔드(`backend/*.mjs`와 테스트)와 `scripts/` 전체(실행기·Windows 실행기·SQLite 점검·JSON 수집) 제거, 예시 운항 데이터를 `backend/knowledge/sample-data.json`으로 변환. SQLite → PostgreSQL 이전 도구 `pyapi/migrate_sqlite.py` 제거(만든 PostgreSQL DB가 없고, 로컬 SQLite에도 테스트 흔적만 있어 옮길 데이터 없음). `maritime_data`의 별도 `pyproject.toml`·requirements를 backend로 통합하고 `MARITIME_DATA_API_TOKEN`이 있으면 `/api/maritime-data/*`를 같은 앱에 마운트. Next.js는 `output: 'standalone'`.
+- **버그 수정 / 2026-10-13** (e2e로 발견): ① 선박 목록이 `ORDER BY id`라 UUID로 등록한 선박이 임의 위치에 끼어 화면의 기본 선박이 바뀌던 문제 — `ships.seq`(identity, 등록 순서) 추가. ② LAN·서버 IP로 `http://` 접속 시 `crypto.randomUUID`가 없어 문서 등록이 실패하던 문제 — `frontend/src/lib/id.js`에서 `getRandomValues` 대체 경로 사용.
+- **FastAPI 이전 / 2026-10-09~10** (PR #7): 기존 `/api/*`를 FastAPI·PostgreSQL로 이전, SQLite 일회성 이전 도구, uv 잠금 파일 추가. (이 항목은 2026-10-13에 소급 기록)
 - **역할4 PR 최신 main 반영 / 2026-10-08**: 팀 PR #5(main `18831cb`, 기본 앱 1.4.0)를 병합하고 역할4 문서 충돌 해결. Next.js 공개 진입점(5173)·내부 API(8000)·선택 Python Tool(8001)의 경계에 맞춰 문서를 갱신. 팀의 채택 ADR 0005~0007을 보존하고 역할4 연결 제안은 [ADR 0008](adr/0008-maritime-data-tool-boundary.md)로 이동. 역할4 핵심 로직·DB 정의와 최신 팀 Node/Next.js 코드는 그대로 유지.
 - **역할4 PR 구조 정리 / 2026-10-08** (기본 앱 버전 유지): 팀 main의 문서·소스 구조를 반영. Python 해사 Tool을 `backend/maritime_data/`로 옮기고 import·실행·적재 경로를 갱신. 역할4 API·데이터 계약은 `specs/`, PostgreSQL 테이블·ERD는 `data-model.md`, 설치·원본 확보·이전 안내는 `user-guide.md`에 통합. 생성기는 DDL·dictionary만 출력하도록 수정하여 설명 문서를 덮어쓰지 않음. 문서 목록·정리 계획·[ADR 0008 제안](adr/0008-maritime-data-tool-boundary.md) 추가. 조회·계산 로직·DB 스키마·기존 Node 앱 코드는 변경하지 않음.
 
@@ -20,6 +23,22 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-13 — 패키지 분리·docker compose·e2e
+
+환경: Linux 클라우드 작업 공간(Python 3.13, uv, Node.js 22, PostgreSQL 16, Playwright 번들 Chromium). **Docker 데몬이 없어 이미지 빌드와 `docker compose up`은 실행하지 못했습니다.** 대신 compose와 같은 구성을 프로세스로 띄워 검증했습니다: 빈 DB에 `schema.sql` 적용 → `uvicorn pyapi.workspace_api:app --proxy-headers` → `next build` 산출물을 `frontend/Dockerfile`의 prod 단계와 같은 배치(standalone + static + public)로 `node server.js` 실행 → `e2e/`에서 Playwright.
+
+| 검증 | 결과 |
+|---|---|
+| `docker compose config -q` (운영, 운영+개발 오버레이, `--profile e2e`) | 3개 모두 통과 |
+| `backend/`: `uv lock`, `uv sync --locked`, `uv run pytest` | 58 통과, 4 건너뜀(`MARITIME_DATA_TEST_DATABASE_URL` 필요한 실 DB 테스트) |
+| `frontend/`: `npm ci`, `npm test`, `npm run build` | 단위 4개 통과, 빌드 성공(standalone) |
+| e2e, `E2E_BASE_URL=http://127.0.0.1:5173` | 14단계 1개 테스트 통과(약 20초) |
+| e2e, compose와 같은 조건 `http://e2e-frontend:5173` + `HAEDAP_ALLOWED_HOSTS=e2e-frontend` | 통과 (수정 전에는 `crypto.randomUUID` 오류로 실패) |
+| 스키마 미적용 DB | `/api/health` 503 `SCHEMA_NOT_READY` |
+| 허용되지 않은 Host로 프록시 경유 요청 | 403 |
+
+미검증: Docker 이미지 빌드·실행(특히 `postgres:18-alpine`의 초기화 스크립트, `mcr.microsoft.com/playwright:v1.62.1-noble` 이미지, macOS·Windows 바인드 마운트 핫 리로드), Node.js 24에서의 실행(engines 기준), 외부 LLM 호출.
 
 ### 2026-10-08 — 역할4 PR 최신 main 반영
 

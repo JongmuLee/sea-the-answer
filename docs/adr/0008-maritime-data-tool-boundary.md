@@ -1,6 +1,6 @@
 # ADR 0008 — 해사 데이터 Tool의 독립 실행과 내부 API 연결 경계
 
-- 상태: 제안
+- 상태: 제안 — 실행 위치(루프백 8001 독립 서비스)는 [0009](0009-split-packages-and-compose.md)로 대체: backend 앱에 `/api/maritime-data/*` 라우터로 마운트. 화면 어댑터·권한·ID 매핑 경계는 유효
 - 날짜: 2026-10-08
 - 결정자: 팀 검토 예정 (역할4 제안)
 - 관련: [ADR 0006](0006-nextjs-entry-rewrites-to-api.md), [ADR 0007](0007-runtime-api-origin-via-proxy.md), [ADR 0003](0003-sqlite-fts5-local-storage.md), [API 명세](../specs/maritime-data-api.md), [팀 연결 계획](../plans/2026-10-08-team-module-integration.md)

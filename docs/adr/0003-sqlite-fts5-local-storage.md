@@ -1,6 +1,6 @@
 # 0003. Node.js 내장 SQLite + FTS5로 로컬 저장·검색한다
 
-- 상태: 채택 (1.2.x에서 도입, 2026-10-08 소급 기록)
+- 상태: 대체됨([0009](0009-split-packages-and-compose.md)) — 저장소는 FastAPI·PostgreSQL로 이전(2026-10-10), Node/SQLite 구현은 2026-10-13 제거. 1.2.x에서 도입, 2026-10-08 소급 기록
 - 날짜: 2026-09-30
 - 관련: [`../data-model.md`](../data-model.md), [`../plans/2026-10-08-team-module-integration.md`](../plans/2026-10-08-team-module-integration.md) 2단계
 

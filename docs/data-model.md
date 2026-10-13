@@ -1,22 +1,18 @@
 # 데이터 모델
 
-> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-08 (`backend/db.mjs`, `backend/workspace.mjs`, `backend/maritime_data/schema/schema.sql` 대조)
+> 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-13 (`backend/pyapi/schema.sql`, `backend/pyapi/workspace_store.py`, `backend/maritime_data/schema/schema.sql` 대조)
 > 테이블·필드·상태 값을 바꾸면 같은 작업에서 이 문서를 고치고, 되돌리기 어려운 변경이면 ADR을 남깁니다.
 
 ## 1. 저장소 개요
 
-- **엔진**: Node.js 내장 `node:sqlite`(`DatabaseSync`), 파일 하나. `PRAGMA journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000`.
-- **위치**: `HAEDAP_DB_PATH` → 없으면 `backend/data/haedap.sqlite`(옛 `data/haedap.sqlite`만 있으면 그것을 계속 사용, 둘 다 있으면 시작 중단). 규칙은 `backend/paths.mjs`.
-- **스키마 버전 표시**: `PRAGMA user_version=1`(문서·검색 테이블), `settings.schema='2'`(작업공간 테이블). 스키마는 서버 시작 시 `CREATE TABLE IF NOT EXISTS`로 생성되며 별도 마이그레이션 도구는 없습니다.
-- **두 계층**
-  - 검색 계층(`db.mjs`): `documents`, `chunks`, `chunks_fts`, `reports`, `tool_runs`, `queries`
-  - 작업공간 계층(`workspace.mjs`): 사용자·권한·메타데이터·운항·승인·감사·설정
-- **JSON `body` 컬럼**: 선박·운항·문서 메타 등은 필드를 TEXT JSON으로 저장합니다. 검색·정렬에 쓰는 값(`ship`, `date` 등)만 별도 컬럼으로 뺍니다.
+- **엔진**: PostgreSQL(compose 서비스 `db`, `postgres:18-alpine`). FastAPI가 요청마다 `psycopg`로 연결하고 요청 단위 트랜잭션으로 커밋·롤백합니다.
+- **위치**: `DATABASE_URL`. compose에서는 `db` 컨테이너, 데이터는 볼륨 `haedap_db-data`.
+- **스키마**: [`backend/pyapi/schema.sql`](../backend/pyapi/schema.sql). 모든 문장이 멱등(`IF NOT EXISTS`)이며 compose의 `db`가 **빈 볼륨으로 처음 시작할 때** 자동 적용합니다. 이미 만든 DB를 바꾸는 마이그레이션 도구는 아직 없습니다(운영 DB가 생기기 전이므로, 스키마를 바꾸면 로컬 DB는 다시 만듭니다 — 8절).
+- **JSON `body` 컬럼**: 선박·운항·문서 메타 등은 필드를 `jsonb`로 저장합니다. 검색·정렬에 쓰는 값(`ship`, `date` 등)만 별도 컬럼으로 뺍니다.
 
 ```mermaid
 erDiagram
   documents ||--o{ chunks : "document_id"
-  chunks ||--|| chunks_fts : "chunk_id"
   chunks ||--o| chunk_pages : "id"
   documents ||--o| document_meta : "id"
   documents ||--o| document_files : "id"
@@ -27,7 +23,7 @@ erDiagram
   users ||--o{ changes : "actor/reviewer"
 ```
 
-(관계선은 논리적 관계이며, 실제 외래키 제약은 `chunks.document_id → documents.id` 하나뿐입니다.)
+(관계선은 논리적 관계입니다. 실제 외래키는 `schema.sql`을 보세요 — 예: `chunks.document_id → documents.id`, `operations.ship → ships.id`.)
 
 ## 2. 문서와 검색
 
@@ -46,15 +42,14 @@ erDiagram
 | `active` | INTEGER | 1 = 현재 개정본. `UNIQUE(logical_id) WHERE active=1`로 하나만 허용 |
 | `imported_at` | TEXT | ISO 시각 |
 
-### `chunks` / `chunks_fts` / `chunk_pages`
+### `chunks` / `chunk_pages`
 
 | 테이블 | 컬럼 | 설명 |
 |---|---|---|
-| `chunks` | `id`(=`{revision}-{n}`), `document_id`, `position`, `heading`, `text` | 절을 문장·줄 경계로 최대 900자씩 분할 |
-| `chunks_fts` | `chunk_id` UNINDEXED, `terms` | FTS5 가상 테이블. `terms` = 제목·조항·소제목·본문의 토큰(단어, 한글 바이그램, 용어 사전 `conceptN`) |
+| `chunks` | `id`(=`{revision}-{n}`), `document_id`, `position`, `heading`, `text` | 절을 900자씩 분할 |
 | `chunk_pages` | `id`(청크 ID), `page` | PDF 물리 페이지 번호(없으면 NULL → "페이지 미지정") |
 
-검색: 질문 토큰을 `"t1" OR "t2" …`로 MATCH → `bm25` 상위 30개 → 의미 있는 일치(용어 사전 또는 3자 이상 단어 1개, 또는 2개 이상 일치)만 남겨 최대 5개.
+검색(`Workspace.search`): 질문에서 영숫자 2자 이상·한글 2자 이상 단어를 최대 30개 뽑고 한영 동의어 묶음(`SEARCH_SYNONYMS`)을 더한 뒤, 열람 가능한 적용 중 문서의 청크마다 제목·조항·소제목·본문에 포함된 단어 수로 순위를 매겨 최대 5개를 반환합니다. 별도 검색 인덱스는 없습니다.
 
 ### `document_meta` / `document_files`
 
@@ -70,7 +65,9 @@ erDiagram
 
 ## 3. 운항
 
-### `ships(id, body, version)`
+### `ships(id, body, version, seq)`
+
+`seq`는 등록 순서(identity)입니다. 목록과 화면의 기본 선박 선택이 이 순서를 따릅니다(`ORDER BY seq, id`). API 응답에는 나오지 않습니다.
 
 `body` 필드:
 
@@ -141,7 +138,7 @@ erDiagram
 
 ## 7. 백업 형식
 
-DB 옆 `backups/{uuid}.json`.
+`HAEDAP_BACKUP_DIR/{uuid}.json` (compose: 볼륨 `haedap_backups`의 `/data/backups`, 직접 실행 기본값: `backend/data/backups`). 각 테이블을 `SELECT *` 그대로 담으므로 `ships.seq` 같은 컬럼도 포함되며, 복구는 컬럼 이름을 지정해 넣습니다(그 컬럼이 없는 이전 백업은 기본값으로 채움).
 
 ```json
 {
@@ -157,23 +154,21 @@ DB 옆 `backups/{uuid}.json`.
 }
 ```
 
-- `chunks_fts`는 백업하지 않고 복구 시 재생성합니다.
 - 복구 조건: `format`·`version:2`·체크섬 일치, 16개 테이블 모두 존재, 활성 관리자 1명 이상. 복구 직전 자동 백업을 만들고 한 트랜잭션에서 전체 교체합니다.
 - `.env`(API 키)는 포함하지 않습니다.
 
 ## 8. 스키마를 바꿀 때
 
-1. 새 컬럼·테이블은 `CREATE TABLE IF NOT EXISTS` / 조건부 `ALTER TABLE`로 기존 DB에서도 열리게 합니다.
-2. 백업 대상이면 `workspace.mjs`의 `backupTables`에 추가하고, 이전 백업 복구 시의 동작을 정합니다(백업 `version`을 올릴지 결정 → ADR).
-3. `settings.schema` 또는 `user_version`을 올리고 이 문서의 해당 절을 갱신합니다.
-4. `backend/tests/`에 기존 DB 이전 회귀 테스트를 추가합니다.
-
+1. `backend/pyapi/schema.sql`을 고칩니다. compose의 `db`는 **빈 볼륨일 때만** 이 파일을 실행하므로, 로컬 DB는 `docker compose down -v` 후 다시 올려 새로 만듭니다(데이터 삭제됨).
+2. 아직 지켜야 할 운영 DB가 없어서 마이그레이션 도구를 두지 않았습니다. 운영 데이터가 생기기 전에 마이그레이션 방식(예: Alembic)을 정하고 ADR로 남깁니다.
+3. 백업 대상이면 `BACKUP_TABLES`에 추가하고, 이전 백업 복구 시의 동작을 정합니다(백업 `version`을 올릴지 결정 → ADR).
+4. 이 문서의 해당 절을 갱신하고, `backend/tests/`에 회귀 테스트를, 화면 흐름에 영향이 있으면 e2e를 실행합니다.
 
 ## 9. PostgreSQL 해사 데이터 Tool (선택)
 
-기본 앱의 SQLite와 독립적인 PostgreSQL `maritime_data` 스키마입니다. Node 서버 시작 시 생성되지 않으며, 별도 전처리·적재를 거친 자료만 조회합니다. 아래 여섯 테이블과 두 조회 View가 역할4 Tool의 저장 모델입니다. 실제 MRV와 Synthetic Noon의 구분·품질·단위 정책은 [데이터 명세](specs/maritime-data.md), 조회·계산 입력은 [API 명세](specs/maritime-data-api.md)에 정의합니다.
+앱 테이블과 분리된 PostgreSQL `maritime_data` 스키마입니다. 앱 시작 시 생성되지 않으며, 별도 전처리·적재를 거친 자료만 조회합니다. 아래 여섯 테이블과 두 조회 View가 역할4 Tool의 저장 모델입니다. 실제 MRV와 Synthetic Noon의 구분·품질·단위 정책은 [데이터 명세](specs/maritime-data.md), 조회·계산 입력은 [API 명세](specs/maritime-data-api.md)에 정의합니다.
 
-구현 정의는 [`schema.sql`](../backend/maritime_data/schema/schema.sql)이며, 컬럼 원본은 `scripts/prepare_maritime_data.py`의 `FIELDS`와 `schema/dictionary.json`입니다. SQL의 NOT NULL·CHECK·외래키는 아래 표의 필드 규칙에 추가 적용됩니다. 기존 앱의 SQLite 테이블을 이 구조로 교체하거나 두 저장소를 자동 결합하지 않습니다.
+구현 정의는 [`schema.sql`](../backend/maritime_data/schema/schema.sql)이며, 컬럼 원본은 `scripts/prepare_maritime_data.py`의 `FIELDS`와 `schema/dictionary.json`입니다. SQL의 NOT NULL·CHECK·외래키는 아래 표의 필드 규칙에 추가 적용됩니다. 앱 테이블을 이 구조로 교체하거나 두 데이터를 자동 결합하지 않습니다.
 
 ### ERD
 
@@ -309,4 +304,4 @@ erDiagram
 
 DDL은 새 스키마 생성용이며 반복 적재 마이그레이션이 아닙니다. 적재 스크립트는 기존 스키마가 있으면 중단하고, 새 적재는 단일 트랜잭션 안에서 검증 후 커밋합니다. CSV·원본·출처 해시는 별도 데이터 버전으로 보존합니다. 이전 `role4` 스키마의 이름 변경 절차는 [운영 안내](user-guide.md#10-해사-데이터-tool-선택)에 있습니다.
 
-기본 앱의 SQLite JSON 백업에는 이 PostgreSQL 데이터와 원본 파일이 포함되지 않습니다. 별도로 PostgreSQL 백업과 원본·전처리 산출물을 보관해야 합니다. 공개 제원·환경성능 참조 자료는 별도 데이터 폴더에 관리하며, 현재 위 여섯 운영 테이블에 자동 적재하거나 공식 CII 입력으로 사용하지 않습니다.
+기본 앱의 JSON 백업에는 이 PostgreSQL 데이터와 원본 파일이 포함되지 않습니다. 별도로 PostgreSQL 백업과 원본·전처리 산출물을 보관해야 합니다. 공개 제원·환경성능 참조 자료는 별도 데이터 폴더에 관리하며, 현재 위 여섯 운영 테이블에 자동 적재하거나 공식 CII 입력으로 사용하지 않습니다.

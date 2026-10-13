@@ -35,11 +35,7 @@
 - ‘사용 중’은 내부에서 지정한 적용 버전입니다. 외부 최신 규정 자동 확인 기능은 아닙니다.
 - DOCX·PPT·일반 텍스트 파일 등록은 아직 지원하지 않습니다(계획: [`plans/2026-10-08-team-module-integration.md`](plans/2026-10-08-team-module-integration.md)).
 
-운영자는 JSON 문서 배열을 직접 수집할 수도 있습니다. 형식은 `backend/knowledge/seed.json`을 참고하세요.
-
-```bash
-npm run ingest -- backend/knowledge/seed.json
-```
+DB가 비어 있으면 첫 요청 때 `backend/knowledge/seed.json`의 기본 문서가 자동 등록됩니다. 이전 Node 버전의 JSON 일괄 수집 명령(`npm run ingest`)은 제거되었으므로 문서는 화면(또는 같은 `/api/changes` API)으로 등록합니다.
 
 ## 2. 역할과 승인
 
@@ -88,65 +84,49 @@ npm run ingest -- backend/knowledge/seed.json
 - `.env`는 백업에 포함되지 않으니 별도로 보관합니다.
 - 서버가 켜지지 않으면 정상 종료된 상태의 DB 폴더(기본 `backend/data`) 복사본을 복원할 수 있습니다. 실행 중인 DB를 임의로 교체하지 마세요.
 
-## 7. 같은 네트워크의 팀원이 접속하기
+## 7. 같은 네트워크의 팀원이 접속하기 · 서버에 올리기
 
-`npm run start:lan` 또는 Windows CMD의 `scripts\start.cmd -Lan`으로 실행하고, 출력된 `LAN (...)` 주소를 같은 네트워크의 팀원에게 알려줍니다. 팀원은 로그인 없이 기본 기능을 사용합니다.
+기본 실행은 이 PC에서만 접속됩니다(frontend 포트가 `127.0.0.1`에만 열림). 다른 PC에서 접속하게 하려면 최상위 `.env`에 아래 두 값을 넣고 `docker compose up -d`로 다시 시작합니다.
 
-기본 실행은 이 PC에서만 접속됩니다. LAN 실행은 이 PC의 LAN 주소로 들어온 요청만 받고 임의 Host·다른 출처 요청은 거부하지만, **접속자 IP를 같은 서브넷으로 제한하지는 않습니다**(1.4.0부터). 신뢰할 수 있는 사설 네트워크에서만 켜고, 같은 서브넷으로 제한하려면 OS 방화벽을 쓰세요. Ubuntu는 `ufw`(예: `sudo ufw allow from 192.168.0.0/24 to any port 5173`), Windows는 인바운드 규칙의 원격 주소를 "로컬 서브넷"으로 제한하고, macOS는 처음 실행 시 뜨는 네트워크 연결 허용 창에서 허용합니다. 학교·공용 인터넷에 공개하는 배포 구성이 아닙니다.
+```dotenv
+HAEDAP_BIND=0.0.0.0
+HAEDAP_ALLOWED_HOSTS=192.168.0.10        # 팀원이 주소창에 입력할 이 PC의 IP 또는 서버 도메인(쉼표로 여러 개)
+```
 
-## 8. Windows 실행기 (`start.cmd` / `start.ps1`)
+팀원은 `http://192.168.0.10:5173`으로 접속해 로그인 없이 기본 기능을 사용합니다. `HAEDAP_ALLOWED_HOSTS`에 없는 주소로 들어온 요청은 `HOST_DENIED`(403)로 거부합니다. **접속자 IP를 같은 서브넷으로 제한하지는 않으므로** 신뢰할 수 있는 네트워크에서만 켜고, 필요하면 OS 방화벽을 씁니다. Ubuntu는 `sudo ufw allow from 192.168.0.0/24 to any port 5173`, Windows는 인바운드 규칙의 원격 주소를 "로컬 서브넷"으로 제한합니다.
 
-Windows에서 더블클릭 한 번으로 설치·빌드·실행까지 하게 해 주는 편의 도구입니다. Ubuntu 서버·macOS에서는 쓰지 않고 `npm` 명령을 직접 실행합니다.
+TLS(HTTPS)는 포함하지 않습니다. 인터넷에 공개하는 서버라면 Nginx·Caddy 같은 리버스 프록시를 앞에 두고, 그 도메인을 `HAEDAP_ALLOWED_HOSTS`에 넣으세요. PostgreSQL과 FastAPI는 어떤 경우에도 외부에 공개하지 않습니다(운영 compose는 두 포트를 열지 않음). 공유 서버에서는 `.env`의 `POSTGRES_PASSWORD`를 기본값에서 바꾸세요. **이미 만들어진 DB 볼륨의 비밀번호는 `.env`만 바꿔서는 바뀌지 않습니다** — 처음 시작하기 전에 정하거나, DB 안에서 `ALTER USER`로 바꿉니다.
 
-`scripts\start.cmd`는 프로젝트 최상위로 이동한 뒤, 실행 정책 제한 없이(`-ExecutionPolicy Bypass`) `scripts\start.ps1`을 호출하고 받은 옵션을 그대로 넘깁니다. 실패하면 창이 바로 닫히지 않도록 `pause`합니다(`HAEDAP_NO_PAUSE=1`이면 생략).
+## 8. 새 버전으로 바꾸기
 
-`scripts\start.ps1`이 하는 일:
+데이터는 Docker 볼륨(`haedap_db-data`, `haedap_backups`)에 있으므로 코드만 바꾸고 다시 빌드하면 됩니다.
 
-1. **Node.js 찾기**: `-NodePath` 옵션 → `HAEDAP_NODE` 환경변수 → PATH의 `node` 순서. 없으면 Node.js 24 LTS 설치 안내 후 종료. 찾은 Node 폴더를 PATH 맨 앞에 넣어 `npm`도 같은 Node를 쓰게 함.
-2. **런타임 점검**: `scripts/check-runtime.cjs`로 SQLite·FTS5 지원 확인, Node 주 버전이 24 이상인지 확인.
-3. **패키지 설치**: `node_modules/next`가 없으면 `npm ci`.
-4. **작업 실행** (`-Task`, 기본 `serve`)
-   - `serve`: 빌드(`frontend/.next/BUILD_ID`)가 없으면 `npm run build` 후 `node scripts/run.mjs` 실행. `-Port`, `-Lan`을 `--port`, `--lan`으로 전달.
-   - `build`: `npm run build` / `test`: `npm test` / `check`: 1~2단계만
-   - `ingest`: `node scripts/ingest.mjs <-Document 경로>` (기본 `backend/knowledge/seed.json`)
-5. Next.js 사용 통계 전송을 끔(`NEXT_TELEMETRY_DISABLED=1`).
+```bash
+git pull
+docker compose up --build -d
+```
 
-## 9. 기존 프로젝트의 데이터를 유지하면서 새 버전으로 바꾸기
+`docker compose down -v`는 **볼륨까지 지우므로** 데이터를 지우려는 경우에만 씁니다. 업그레이드 전에는 관리 → 백업·복구에서 백업을 만들고 내려받아 두세요.
 
-**기존 서버를 정상 종료한 후, 새 버전은 다른 폴더에 풀거나 클론하세요.**
+**DB 스키마(`backend/pyapi/schema.sql`)가 바뀐 버전이면** 이미 만든 DB에는 자동으로 반영되지 않습니다(DB 초기화 스크립트는 빈 볼륨에서만 실행). 아직 마이그레이션 도구가 없으므로 지금은 `docker compose down -v`로 DB를 지우고 새로 만듭니다. 운영 데이터가 생기기 전에 마이그레이션 방식을 정할 예정입니다([데이터 모델 8절](data-model.md#8-스키마를-바꿀-때)).
 
-1. 기존 실행 창에서 `Ctrl+C`로 서버를 종료합니다.
-2. 새 버전을 별도 폴더에 준비합니다. 옛 폴더 위에 덮어쓰면 삭제 대상 레거시 파일이 남습니다.
-3. 기존 최상위의 `data` 폴더(1.3.0 이하) 또는 `backend/data` 폴더 전체를 새 프로젝트의 **`backend/data`**로 복사합니다.
-4. `.env`를 사용했다면 최상위로 복사합니다. 예전 설정이 `HAEDAP_DB_PATH=data/haedap.sqlite`라면 **`HAEDAP_DB_PATH=backend/data/haedap.sqlite`**로 바꿉니다.
-5. `npm ci` → `npm run build` → `npm start` 순서로 실행합니다. 이전 `node_modules`, `.next`, `.next-dev`는 복사하지 않습니다.
+이전 Node/SQLite 버전의 데이터(`backend/data/haedap.sqlite`)를 옮기는 도구는 제공하지 않습니다.
 
-DB 경로 선택 규칙:
-
-- `.env`의 `HAEDAP_DB_PATH`가 우선합니다. 상대 경로의 기준은 항상 프로젝트 최상위이며 절대 경로도 됩니다.
-- 설정이 없으면 `backend/data/haedap.sqlite`를 사용(없으면 생성)합니다.
-- 설정이 없고 옛 `data/haedap.sqlite`만 있으면 그 파일을 계속 씁니다(자동 이동·삭제 없음).
-- 양쪽에 모두 있으면 임의로 고르지 않고 시작을 멈춥니다. `.env`에 사용할 경로를 지정하세요.
-
-1.2.2 이전 버전의 DB는 기존 `admin`의 사용자 ID·자료 소유권을 유지하면서 비밀번호를 `1234`, 역할을 관리자로 한 번 갱신합니다. 브라우저에만 남아 있던 미저장 초안은 이전 버전에서 JSON으로 내보낸 뒤 **보고서 → 초안 JSON 가져오기**로 옮길 수 있습니다.
-
-## 10. 문제 해결
+## 9. 문제 해결
 
 | 증상 | 확인할 내용 |
 |---|---|
-| node/npm 명령을 찾지 못함 | 공식 Node.js 24 LTS를 npm과 함께 설치하고 터미널을 새로 열기 |
-| PowerShell에서 npm이 막힘 | `npm.cmd`로 실행하거나 CMD 창 사용 |
-| SQLite/FTS5 오류 | `node scripts/check-runtime.cjs` 확인. VS Code 내장 런타임 등 대신 공식 Node.js 사용 |
-| 패키지 설치 실패 | 인터넷·프록시를 확인하고 프로젝트 폴더에서 `npm ci` 재실행 |
-| "먼저 npm run build를 실행해 주세요" | `npm run build` 실행 |
-| API 연결 실패 | 백엔드(API 서버)가 켜져 있는지 확인. 개발 중이면 `npm run dev:backend`. 8000 포트를 바꿨다면 `.env`의 `HAEDAP_API_ORIGIN`을 고친 뒤 두 프로세스를 모두 재시작했는지 확인 |
-| 포트 사용 중 | 기존 실행 창을 종료하거나 `npm start -- --port 5174` |
-| 수정한 화면이 반영되지 않음 | 일반 실행이면 재빌드 후 재시작. 개발 중이면 `npm run dev:backend`와 `npm run dev:frontend`를 함께 실행 |
-| 8000 포트로 열었더니 "API server only" | 화면은 Next.js 주소 `http://127.0.0.1:5173`으로 접속 |
-| "API port 8000 is in use" | 다른 프로그램이 8000을 쓰는 중. `.env`에 `HAEDAP_API_ORIGIN=http://127.0.0.1:8100` 지정 후 두 프로세스 재시작 |
-| 큰 PDF·백업 업로드가 끊김 | 101MB 이하인지 확인(`next.config.mjs`의 `proxyClientMaxBodySize`) |
-| DB가 양쪽에 있다는 오류 | `.env`의 `HAEDAP_DB_PATH`로 사용할 DB 지정 |
-| 관리자 로그인 실패 | `admin / 1234` 확인. 기존 서버 종료 후 새 폴더에서 실행 |
+| `docker compose` 명령이 없음 | Docker Desktop(Windows·macOS) 또는 Docker Engine + Compose 플러그인(Ubuntu) 설치 |
+| 화면이 안 열림 | `docker compose ps`로 세 서비스가 `healthy`인지 확인. 아니면 `docker compose logs backend` |
+| `DATA_SOURCE_UNAVAILABLE`, `SCHEMA_NOT_READY` | DB 연결·스키마 문제. compose 밖에서 만든 DB라면 `backend/pyapi/schema.sql` 적용 여부 확인 |
+| DB 비밀번호 인증 실패 | 볼륨을 만든 뒤 `POSTGRES_PASSWORD`를 바꾼 경우. 원래 값으로 되돌리거나 DB에서 `ALTER USER` |
+| `HOST_DENIED` (403) | 접속한 주소를 `.env`의 `HAEDAP_ALLOWED_HOSTS`에 추가 후 `docker compose up -d` |
+| 포트 사용 중 | `.env`의 `PORT`(공개 포트)를 바꿈. 개발 오버레이의 5432·8000이 겹치면 `POSTGRES_PORT`를 바꾸거나 해당 프로그램 종료 |
+| 수정한 코드가 반영되지 않음 | 운영 compose는 이미지에 코드를 담으므로 `--build` 필요. 개발 오버레이에서 저장이 감지되지 않으면 `compose.dev.yaml`의 `WATCHPACK_POLLING` 주석 해제 |
+| 의존성을 바꿨는데 반영되지 않음 | `docker compose … up --build` (의존성은 이미지에 설치됨) |
+| 큰 PDF·백업 업로드가 끊김 | 101MB 이하인지 확인(`frontend/next.config.mjs`의 `proxyClientMaxBodySize`) |
+| 관리자 로그인 실패 | `admin / 1234` 확인. 1분에 10번 넘게 틀리면 잠시 기다림 |
+| backend 재시작 후 로그아웃됨 | 관리자 세션은 backend 메모리에 있어 정상 동작 |
 | 등록·수정·삭제 버튼이 안 보임 | 관리자 로그인 여부 확인 |
 | 문서가 안 보임 | 열람 범위·사용 중/이전/폐기 필터 확인 |
 | 운항 화면이 비어 있음 | 선박·기록 등록 및 기간 확인. 가상 예시는 관리자 버튼으로 등록 |
@@ -156,36 +136,35 @@ DB 경로 선택 규칙:
 
 ## 10. 해사 데이터 Tool (선택)
 
-기본 Node/SQLite 앱과 별도로 실행되는 역할4 도구입니다. 코드는 `backend/maritime_data/`, 계약은 [API 명세](specs/maritime-data-api.md)와 [데이터 명세](specs/maritime-data.md), 테이블·ERD는 [데이터 모델](data-model.md#9-postgresql-해사-데이터-tool-선택)에 있습니다. 아래 명령은 저장소 루트에서 실행합니다.
+역할4 도구입니다. 코드는 `backend/maritime_data/`(backend uv 프로젝트의 일부), 계약은 [API 명세](specs/maritime-data-api.md)와 [데이터 명세](specs/maritime-data.md), 테이블·ERD는 [데이터 모델](data-model.md#9-postgresql-해사-데이터-tool-선택)에 있습니다. 아래 명령은 별도 표시가 없으면 저장소 최상위에서 실행합니다.
 
 ### 설치와 실행
 
-Python 3.12 또는 3.13, 별도 PostgreSQL 및 준비된 해사 데이터 스키마가 필요합니다. 기존 `.venv`가 있으면 재사용합니다.
+Python 의존성은 backend와 같은 `backend/pyproject.toml`·`uv.lock`으로 관리합니다. 전처리 스크립트에만 필요한 pandas·openpyxl은 `data` 그룹입니다.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend/maritime_data/requirements.lock.txt
-if (-not (Test-Path -LiteralPath .env.local)) {
-    Copy-Item backend/maritime_data/.env.example .env.local
-}
+```bash
+uv sync --project backend --group data
 ```
 
-루트 `.env.local`에 `DATABASE_URL`(PostgreSQL 연결 주소)과 `MARITIME_DATA_API_TOKEN`(직접 생성한 32자 이상 토큰)을 설정합니다. 기존 파일에는 필요한 키만 추가하고 덮어쓰지 않습니다. 기본 앱의 `.env`와는 별도 설정입니다. 원본·CSV·DB·비밀번호·토큰은 Git에 넣지 않습니다.
+**앱에 마운트(권장)**: 최상위 `.env`에 `MARITIME_DATA_API_TOKEN`(직접 생성한 32자 이상 토큰)을 넣고, 해사 데이터가 앱과 다른 DB에 있으면 `MARITIME_DATA_DATABASE_URL`도 넣습니다(비우면 앱 DB 사용). `docker compose up -d`로 다시 시작하면 `/api/maritime-data/*`가 같은 backend에 생깁니다. 토큰이 비어 있으면 라우트가 만들어지지 않습니다. 개발 오버레이에서는 <http://127.0.0.1:8000/docs>에서 Authorize에 토큰을 넣고 시험할 수 있습니다.
 
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn backend.maritime_data.api:create_app --factory --host 127.0.0.1 --port 8001
+**독립 실행(역할4 도구 작업용)**: 루트 `.env.local`에 `DATABASE_URL`(SQLAlchemy 형식 `postgresql+psycopg://…`도 가능)과 `MARITIME_DATA_API_TOKEN`을 두고 실행합니다.
+
+```bash
+cd backend
+uv run uvicorn maritime_data.api:create_app --factory --host 127.0.0.1 --port 8001
 ```
 
-개발용 API 명세는 <http://127.0.0.1:8001/docs>에서 열고 Authorize에 API 토큰을 입력합니다. `/api/health`의 `database_checked=false`는 프로세스만 확인했으며 DB를 검증하지 않았다는 뜻입니다. 실제 DB 조회는 토큰을 포함한 `/api/maritime-data/query`로 확인합니다. 503이면 PostgreSQL 실행·연결·스키마 적재 상태를 확인하세요. 이 도구는 독립 루프백 서비스이며 팀 화면에 자동 연결되지 않습니다.
+`/api/health`의 `database_checked=false`는 프로세스만 확인했으며 DB를 검증하지 않았다는 뜻입니다. 실제 DB 조회는 토큰을 포함한 `/api/maritime-data/query`로 확인합니다. 503이면 PostgreSQL 실행·연결·스키마 적재 상태를 확인하세요. 원본·CSV·DB·비밀번호·토큰은 Git에 넣지 않습니다.
 
 ### 전처리·적재·생성·검증
 
 ```powershell
-.\.venv\Scripts\python.exe backend/maritime_data/scripts/prepare_maritime_data.py --source D:/Data --out data/maritime-data/new-run
+uv run --project backend --group data python backend/maritime_data/scripts/prepare_maritime_data.py --source D:/Data --out data/maritime-data/new-run
 ./backend/maritime_data/scripts/load-maritime-data.ps1 -DataDir data/maritime-data/new-run
-.\.venv\Scripts\python.exe backend/maritime_data/scripts/describe_maritime_data.py
-.\.venv\Scripts\python.exe -m pytest -q backend/maritime_data/tests
-.\.venv\Scripts\python.exe backend/maritime_data/scripts/test_prepare_maritime_data.py
+uv run --project backend python backend/maritime_data/scripts/describe_maritime_data.py
+cd backend; uv run pytest -q maritime_data/tests; cd ..
+uv run --project backend --group data python backend/maritime_data/scripts/test_prepare_maritime_data.py
 ```
 
 이미 전처리한 CSV가 있으면 첫 명령을 생략합니다. 적재 스크립트는 Windows의 `psql.exe`를 사용하며 기본 PostgreSQL 경로가 다르면 `-PgBin`을 지정합니다. 로컬 DB만 지원하고 기존 `maritime_data` 스키마가 있으면 중단합니다. 실패 시 단일 적재 트랜잭션을 롤백합니다. 새 데이터 버전은 `schema/verify_load.sql`의 기대 건수를 먼저 검토합니다.
@@ -199,16 +178,16 @@ if (-not (Test-Path -LiteralPath .env.local)) {
 이전 `role4/.env.local`을 사용한 환경은 필요한 설정을 저장소 루트 `.env.local`로 옮깁니다. 기존 `role4` 스키마·설정이 있으면 Tool을 중지하고 아래 미리보기를 확인한 뒤 이름 전환이 필요한 경우에만 `--apply`를 사용합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe backend/maritime_data/scripts/migrate_maritime_data.py
+uv run --project backend python backend/maritime_data/scripts/migrate_maritime_data.py
 # 미리보기 확인 후 적용이 필요한 경우에만:
-.\.venv\Scripts\python.exe backend/maritime_data/scripts/migrate_maritime_data.py --apply
+uv run --project backend python backend/maritime_data/scripts/migrate_maritime_data.py --apply
 ```
 
-양쪽 스키마나 충돌하는 설정이 있으면 중단합니다. 변경된 설정은 `.env.local.before-maritime-data`에 백업하고 데이터 레코드·원본 폴더는 다시 쓰거나 이동하지 않습니다. DB 이름 전환은 SQLite와의 통합이나 공식 입력 검증을 의미하지 않습니다.
+양쪽 스키마나 충돌하는 설정이 있으면 중단합니다. 변경된 설정은 `.env.local.before-maritime-data`에 백업하고 데이터 레코드·원본 폴더는 다시 쓰거나 이동하지 않습니다. DB 이름 전환은 앱 테이블과의 통합이나 공식 입력 검증을 의미하지 않습니다.
 
 ### 팀 앱 연결 시 참고
 
-Python 호출자는 `from backend.maritime_data import query, calculations, agent`로 공통 로직을 사용할 수 있습니다. 내부 API(현재 Node)의 HTTP 어댑터·키 매핑·권한·감사 구현은 후속 작업입니다. 독립 API의 토큰은 서버에 보관하고 브라우저로 보내지 않습니다. 현재 구현 범위와 경계 제안은 [아키텍처](architecture.md#8-해사-데이터-tool의-경계-선택), [ADR 0008](adr/0008-maritime-data-tool-boundary.md)를 참고하세요.
+backend 코드는 `from maritime_data import query, calculations, agent`로 공통 로직을 바로 호출할 수 있습니다(같은 프로세스). 화면에서 쓰려면 토큰 없이 앱 권한·CSRF·감사를 적용하는 어댑터 라우트가 필요하며 아직 구현되지 않았습니다. 토큰은 서버에 보관하고 브라우저로 보내지 않습니다. 현재 구현 범위와 경계 제안은 [아키텍처](architecture.md#8-해사-데이터-tool의-경계-선택), [ADR 0008](adr/0008-maritime-data-tool-boundary.md)를 참고하세요.
 
 ### 원본 확보·공개 참조 자료·기존 데이터 버전
 
