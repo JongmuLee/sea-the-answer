@@ -24,10 +24,10 @@
 
 | 위치 | 넣을 내용 | 넣지 않을 내용 |
 |---|---|---|
-| `README.md` | 프로젝트 소개, 폴더 구조 요약, 설치할 것, Windows·macOS 실행 방법, 문서 안내 링크 | API 상세, DB 스키마, 변경 이력 전체 |
+| `README.md` | 프로젝트 소개, 폴더 구조 요약, 설치할 것, 실행·개발·테스트 명령(docker compose, 각 폴더), 문서 안내 링크 | API 상세, DB 스키마, 변경 이력 전체 |
 | `docs/architecture.md` | 실행 구조, 요청 흐름, 모듈 책임과 경계, 보안 경계, 교체 지점 | 개별 API 필드 |
-| `docs/data-model.md` | SQLite 테이블, JSON `body` 필드, 상태 값, 버전·낙관적 잠금, 백업 형식 | 화면 사용법 |
-| `docs/user-guide.md` | 화면별 사용법, 역할·권한, CSV, 백업·복구, LAN, 문제 해결, 데이터 이전 | 내부 구현 |
+| `docs/data-model.md` | PostgreSQL 테이블, JSON `body` 필드, 상태 값, 버전·낙관적 잠금, 백업 형식 | 화면 사용법 |
+| `docs/user-guide.md` | 화면별 사용법, 역할·권한, CSV, 백업·복구, LAN·서버, 버전 교체, 문제 해결 | 내부 구현 |
 | `docs/changelog.md` | 버전별 변경 이력과 실제 수행한 검증 기록 | 계획 |
 | `docs/specs/` | 구현해야 할 동작의 계약(API, 입력·출력 형식, 제약) | 일정·담당 |
 | `docs/plans/` | 작업 계획: 목표, 범위, 단계, 담당, 진행 상태 | 확정된 계약(→ specs) |
@@ -61,15 +61,18 @@
 
 ## 5. 코드 작업 규칙
 
-- 최상위 소스 폴더는 `frontend/`, `backend/`, `scripts/` 세 개입니다. 새 최상위 폴더는 `docs/` 외에 만들지 않습니다(필요하면 ADR로 결정).
+- 최상위 소스 폴더는 `frontend/`(npm), `backend/`(uv), `e2e/`(npm, Playwright), `migrations/`(dbmate SQL)와 오프라인 자료 준비 전용 `scripts/`입니다. 팀 피드백을 반영한 [ADR 0011 제안](docs/adr/0011-tools-runtime-and-data-preparation.md)에 따라 오프라인 준비용 `scripts/`를 추가하며 backend uv 환경을 사용합니다. 실행 중 호출되는 Tool은 `backend/tools/`에 두고 스키마 변경은 `migrations/`에서만 합니다. 이외 새 최상위 폴더는 `docs/` 외에 만들지 않습니다(필요하면 ADR로 결정, [ADR 0009](docs/adr/0009-split-packages-and-compose.md), [ADR 0010](docs/adr/0010-dbmate-migrations.md)).
+- 최상위에는 패키지 매니저 파일(`package.json`, `pyproject.toml`)을 두지 않습니다. 의존성은 해당 폴더에서만 추가합니다(`cd frontend && npm install …`, `cd backend && uv add …`). frontend와 backend는 서로의 파일을 import하지 않고 HTTP `/api/*`로만 연결합니다.
+- 서비스 실행 구성은 최상위 `compose.yaml`(운영)·`compose.dev.yaml`(개발)과 각 폴더의 `Dockerfile`에서 관리합니다. 공개 포트는 frontend 하나입니다.
 - 인증·문서 열람 범위·인용 권한 검사를 우회하는 코드를 넣지 않습니다(`docs/architecture.md`의 보안 경계 참고).
 - CII 값·등급, 규정 적용 판정처럼 근거 없는 수치를 화면에 임의로 채우지 않습니다. 산출할 수 없으면 `unavailable`과 사유를 반환합니다.
-- 변경 후 `npm test`를 실행하고, 화면 흐름에 영향이 있으면 `npm run build` 후 `npm run test:browser`를 실행합니다.
+- 변경한 쪽의 테스트를 실행합니다: `backend/`에서 `uv run pytest`, `frontend/`에서 `npm test`(+ 빌드 확인은 `npm run build`). 화면 흐름이나 API 동작에 영향이 있으면 최상위에서 `docker compose --profile e2e up --build --force-recreate --exit-code-from e2e e2e`를 실행하고, 끝나면 `docker compose --profile e2e down`으로 정리합니다(README "테스트" 참고).
+- DB 스키마는 최상위 `migrations/`에 새 파일을 추가해서 바꿉니다(`docker compose run --rm migrate new <이름>`). **이미 커밋된 마이그레이션 파일은 고치지 않고**, `migrate:down`도 함께 씁니다. `docs/data-model.md`를 같은 작업에서 고칩니다(8절).
 
 ## 6. Next.js 16 버전 주의 (에이전트용)
 
 **이 프로젝트의 Next.js는 학습 데이터로 알고 있는 Next.js와 다릅니다.** 16.x 버전에는 이전과 호환되지 않는 변경이 있어 API, 규칙, 파일 구조가 학습 데이터와 다를 수 있습니다.
 
-- 화면 코드를 쓰기 전에 설치된 버전의 안내 문서 `node_modules/next/dist/docs/`에서 관련 부분을 먼저 읽습니다.
+- 화면 코드를 쓰기 전에 설치된 버전의 안내 문서 `frontend/node_modules/next/dist/docs/`에서 관련 부분을 먼저 읽습니다.
 - 사용 중단(deprecated) 경고가 나오면 따릅니다.
-- 이 절은 `next dev`가 `frontend/AGENTS.md`에 자동으로 넣는 영어 안내(`nextjs-agent-rules` 블록)를 한국어로 옮긴 것입니다. 그 자동 생성 파일은 저장소에서 제외했으므로(`.gitignore`) 로컬에 생겨도 이 절을 기준으로 삼습니다. 생성 로직은 `node_modules/next/dist/server/lib/generate-agent-files.js`에서 확인할 수 있습니다.
+- 이 절은 `next dev`가 `frontend/AGENTS.md`에 자동으로 넣는 영어 안내(`nextjs-agent-rules` 블록)를 한국어로 옮긴 것입니다. 그 자동 생성 파일은 저장소에서 제외했으므로(`.gitignore`) 로컬에 생겨도 이 절을 기준으로 삼습니다. 생성 로직은 `frontend/node_modules/next/dist/server/lib/generate-agent-files.js`에서 확인할 수 있습니다.

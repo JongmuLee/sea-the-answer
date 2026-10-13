@@ -1,7 +1,7 @@
 # HTTP API
 
 - 상태: 구현됨 (1.4.0)
-- 최종 확인: 2026-10-08
+- 최종 확인: 2026-10-13 (`backend/api/` 대조)
 - 관련: [`../architecture.md`](../architecture.md), [`../data-model.md`](../data-model.md), [`integrated-answer.md`](integrated-answer.md), [ADR 0004](../adr/0004-public-access-admin-only-writes.md)
 
 ## 1. 목적
@@ -10,11 +10,11 @@
 
 ### 전달 경로와 Host 규칙 (구현이 지켜야 할 것)
 
-- API 서버는 `127.0.0.1`에만 바인딩하고, 루프백이 아닌 상대의 요청은 거부합니다.
-- 실제 호스트 = `X-Forwarded-Host`(루프백 상대일 때만) 또는 `Host`. 호스트 이름은 `127.0.0.1`·`localhost`(LAN 모드면 이 PC의 LAN IPv4 추가), 포트는 프록시 경유면 공개 포트, 직접 호출이면 API 포트여야 합니다. 아니면 403 `HOST_DENIED`.
+- API 서버(FastAPI)는 Next.js만 닿을 수 있는 곳에 둡니다. compose에서는 내부 네트워크의 `backend:8000`(호스트에 공개하지 않음), 직접 실행에서는 `127.0.0.1:8000`.
+- 실제 호스트 = `X-Forwarded-Host`(Next.js 프록시가 설정) 또는 `Host`. 호스트 이름이 `127.0.0.1`·`localhost`·`HAEDAP_ALLOWED_HOSTS` 중 하나가 아니면 403 `HOST_DENIED`. 포트는 검사하지 않습니다.
 - `Origin`이 있으면 `http://<실제 호스트>`와 같아야 하고, `Sec-Fetch-Site`가 `cross-site`/`same-site`면 거부합니다(403 `ORIGIN_DENIED`).
-- `X-Forwarded-For`는 신뢰하지 않습니다(Next.js가 클라이언트 값을 그대로 넘김).
-- `/api/` 밖의 경로는 404.
+- `X-Forwarded-For`는 로그인 시도 제한의 접속자 구분에만 씁니다(API가 내부 네트워크에만 있으므로 신뢰). 권한 판단에는 쓰지 않습니다.
+- 앱 API는 `/api/{path}` 하나가 처리하고, 없는 경로는 404 `NOT_FOUND`. `MARITIME_DATA_API_TOKEN`이 있으면 `/api/maritime-data/*`가 먼저 매칭됩니다([해사 데이터 API](tools.md)).
 
 ## 2. 인증과 쓰기 보호
 
@@ -25,7 +25,7 @@
 - 일반 사용자: 32바이트 난수 `haedap_guest` 쿠키(HttpOnly, SameSite=Strict, 최대 1년). DB 소유자 ID는 `guest_` + 쿠키 SHA-256. 인증 수단이 아니라 작업공간 구분용입니다.
 - 요청 헤더 `X-Haedap-Identity`가 현재 쿠키의 사용자와 다르면 **401** — 다른 탭·세션 만료로 사용자가 바뀐 상태에서 이전 사용자의 내용이 저장되는 것을 막습니다. 권한 부여는 이 헤더가 아니라 서버의 역할 검사로 합니다.
 - 세션 12시간, 로그인 실패 횟수 제한, 계정 `version` 변경 시 기존 세션 무효화. 서버 재시작·전체 복구 후 재로그인.
-- **모든 POST**: `Content-Type: application/json` + `X-Haedap-Token`(CSRF) 필요. 같은 출처·Host·LAN 범위 검사.
+- **모든 POST**: `Content-Type: application/json` + `X-Haedap-Token`(CSRF) 필요. 같은 출처·Host 검사.
 - 역할: `admin` — 승인·사용자·백업·전체 로그·원본 자료 변경. `guest` — 공개 문서·운항 조회, 질문·계산, 자기 초안 작성·저장·검토 요청. 이전 `operator`/`viewer` 레코드는 보존하지만 로그인 불가.
 - 제한 문서는 검색 입력 단계부터 제외하고, 원본 PDF·이전 버전·보고서 근거·질문 이력 재열람에도 범위를 검사합니다.
 - 본문 크기 제한: `/api/changes` 38MB(PDF 포함 문서 등록), `/api/backups/import` 100MB, 그 외 POST 1MB. JSON이 아니면 **415 `CONTENT_TYPE`**. Next.js 프록시 한도는 101MB, 응답 대기는 60초입니다.
@@ -62,12 +62,17 @@
 | POST `/api/backups/restore` | 관리자 | `{id, confirm:"복구"}`. 복구 전 자동 보관·재로그인 |
 | POST `/api/backups/settings` | 관리자 | `{autoBackup:"daily"|"off"}` |
 
+앱 JSON 백업·복구의 대상은 기존 앱 16개 테이블입니다. 해사 스키마 전체는 포함하지 않습니다. 같은 DB의 `maritime_data.vessels.ship_id`가 있으면 복구 직전 현재 연결을 보관하고, 앱 선박 교체 후 동일한 정체성이 확인되는 연결만 복원합니다. 실제 선박은 원본 7자리 IMO와 복구한 비샘플 앱 선박의 IMO가 같아야 하고, IMO가 없는 합성 선박은 이전 명시 연결의 이름·선종·DWT·IMO·sample 구분이 유지되어야 합니다. ID만 같고 식별정보가 달라진 선박은 연결하지 않습니다.
+
+복구 응답은 `ok`, `safetyBackup`을 유지하며, 연결 컬럼이 있는 경우 `maritimeLinks={linkedBefore,restored,cleared,missingShips,identityMismatch}`를 추가합니다. 해제된 연결이 있으면 `warnings`도 반환하고 같은 건수를 감사 로그에 남깁니다. 이 응답은 현재 연결 보존 결과이며 과거 해사 데이터·연결을 복구하는 별도 백업을 대체하지 않습니다.
+
 ### 변경 `kind`
 
 `document.save`, `document.delete`, `ship.save`, `operation.save`, `operation.import`, `operation.delete`.
 
 - 관리자만 가능하며 한 트랜잭션에서 즉시 반영합니다. 이력 호환을 위해 `changes.status='approved'`로 기록하지만 승인 대기는 없습니다.
 - 낡은 버전으로 변경하면 **409 `VERSION_CONFLICT`**. CSV 여러 행은 한 트랜잭션.
+- `ship.save`에서 해사 원본과 연결된 선박의 정체성을 바꾸면 **409 `MARITIME_SHIP_IDENTITY_CONFLICT`**. 실제 선박은 원본과 동일한 IMO 및 비샘플 구분을 유지해야 하며 이름·DWT 변경은 허용합니다. 합성 선박은 기존 이름·선종·DWT·IMO·sample 구분을 유지해야 합니다. 필요한 식별정보 수정은 관리자가 연결을 수동 검토·해제한 뒤 수행하고 다시 연결합니다. 이 검사는 원본 데이터나 매핑을 자동 변경하지 않으며 연결이 없는 선박에는 기존 수정 규칙을 적용합니다.
 - 보고서 검토 요청과 이전 버전의 대기 항목은 `POST /api/changes/review`로 처리합니다.
 
 ## 4. 문서 등록 payload (`document.save`)
@@ -109,7 +114,7 @@
 
 문서 삭제는 행을 지우지 않고 `status:'deleted'`로 검색·열람에서 제외합니다. 페이지 번호 없는 기존 자료는 `페이지 미지정`으로 표시합니다.
 
-CLI 수집(`npm run ingest -- <file>`)은 위 `document` 객체의 배열(1~100개)을 받습니다. 예시: `backend/knowledge/seed.json`.
+CLI 일괄 수집 명령은 제거되었습니다(Node 버전의 `npm run ingest`). 빈 DB의 첫 요청 때 `backend/knowledge/seed.json`(위 `document` 객체 배열)이 자동 등록됩니다.
 
 ## 5. 오류 형식
 
@@ -119,7 +124,9 @@ CLI 수집(`npm run ingest -- <file>`)은 위 `document` 객체의 배열(1~100�
 {"error": {"code": "VERSION_CONFLICT", "message": "운항 기록이 변경되었습니다. 다시 열어 주세요."}}
 ```
 
-주요 코드: `LOGIN_FAILED`(401), `FORBIDDEN`(403), `NOT_FOUND`(404), `TOOL_NOT_FOUND`(404), `VERSION_CONFLICT`(409), `SETUP_DISABLED`(410), `CONTENT_TYPE`(415), `ANOMALY`(운항 연료 급증 사유 누락). 메시지는 사용자에게 그대로 보여 줄 한국어 문장입니다.
+주요 코드: `LOGIN_FAILED`(401), `FORBIDDEN`(403), `NOT_FOUND`(404), `TOOL_NOT_FOUND`(404), `VERSION_CONFLICT`(409), `MARITIME_SHIP_IDENTITY_CONFLICT`(409), `SETUP_DISABLED`(410), `CONTENT_TYPE`(415), `ANOMALY`(운항 연료 급증 사유 누락). 메시지는 사용자에게 그대로 보여 줄 한국어 문장입니다.
+
+해사 데이터 적재·연결 작업과 복구의 테이블 잠금이 충돌하면 최대 5초 대기 후 **409 BUSY**를 반환합니다. 복구 트랜잭션은 롤백되어 앱 데이터와 해사 연결을 변경하지 않으며, 작업이 끝난 후 복구를 다시 시도할 수 있습니다.
 
 ## 6. 한계
 
