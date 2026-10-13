@@ -18,7 +18,8 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 
-ROOT = Path(__file__).resolve().parents[2]
+# backend/ — the Python project root (contains pyproject.toml, knowledge/, data/).
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 BACKUP_TABLES = (
     "documents", "chunks", "reports", "tool_runs", "queries", "users",
     "document_meta", "document_files", "chunk_pages", "ships", "operations",
@@ -117,14 +118,14 @@ class Workspace:
         try:
             self.one("SELECT 1 FROM settings LIMIT 1")
         except psycopg.Error as exc:
-            raise ApiError(503, "SCHEMA_NOT_READY", "PostgreSQL에 backend/pyapi/schema.sql을 적용해 주세요.") from exc
+            raise ApiError(503, "SCHEMA_NOT_READY", "PostgreSQL에 pyapi/schema.sql을 적용해 주세요.") from exc
         self.run("INSERT INTO settings(key,value) VALUES('autoBackup','daily') ON CONFLICT(key) DO NOTHING")
         if not self.one("SELECT 1 FROM users WHERE username='admin'"):
             salt = uuid4().hex
             digest = hashlib.scrypt(b"1234", salt=salt.encode(), n=16384, r=8, p=1, dklen=64).hex()
             self.run("INSERT INTO users VALUES(%s,'admin','관리자','admin',%s,true,1)", (str(uuid4()), salt + ":" + digest))
         if not self.one("SELECT 1 FROM documents LIMIT 1"):
-            for raw in json.loads((ROOT / "backend/knowledge/seed.json").read_text(encoding="utf-8")):
+            for raw in json.loads((BACKEND_DIR / "knowledge/seed.json").read_text(encoding="utf-8")):
                 self.save_document({"document": raw, "expectedId": "", "meta": {"scope": "all", "status": "active"}})
 
     def user_by_id(self, user_id: str) -> dict | None:

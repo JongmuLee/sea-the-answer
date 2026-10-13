@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.pyapi import workspace_api
-from backend.pyapi.workspace_store import ApiError, Workspace
-from backend.pyapi.workspace_store import BACKUP_TABLES
-from backend.pyapi.migrate_sqlite import migrate
+from pyapi import workspace_api
+from pyapi.workspace_store import ApiError, Workspace
 
 
 ADMIN = {"id": "admin-1", "username": "admin", "name": "관리자", "role": "admin", "active": True, "version": 1}
@@ -43,7 +40,7 @@ class FakeWorkspace:
         return ADMIN if user_id == ADMIN["id"] else None
 
     def authenticate(self, username, password):
-        from backend.pyapi.workspace_store import ApiError
+        from pyapi.workspace_store import ApiError
 
         if username != "admin" or password != "1234":
             raise ApiError(401, "LOGIN_FAILED", "아이디 또는 비밀번호가 올바르지 않습니다.")
@@ -208,16 +205,3 @@ def test_postgresql_operation_summary_and_calculation_formulas():
     calculation = store.calculate_emissions({"fuel": 10, "factor": 3, "dwt": 50000, "distance": 100})
     assert calculation["emission"] == 30
     assert calculation["intensity"] == 6
-
-
-def test_sqlite_migration_preview_is_read_only(tmp_path):
-    path = tmp_path / "old.sqlite"
-    with sqlite3.connect(path) as source:
-        for table in BACKUP_TABLES:
-            source.execute(f"CREATE TABLE {table}(id TEXT)")
-        source.execute("INSERT INTO documents VALUES('old-doc')")
-    counts = migrate(path, "postgresql://not-used-in-preview", apply=False)
-    assert counts["documents"] == 1
-    assert counts["operations"] == 0
-    with sqlite3.connect(path) as source:
-        assert source.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 1

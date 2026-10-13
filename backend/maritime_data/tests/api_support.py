@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from backend.maritime_data.api import create_app
+from maritime_data.api import create_app
 
 TOKEN = 'test-only-maritime_data-token-12345678901234567890'
 

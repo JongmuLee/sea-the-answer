@@ -21,7 +21,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from .workspace_store import ApiError, ROOT, Workspace, public_user, require
+from .workspace_store import ApiError, BACKEND_DIR, Workspace, public_user, require
 
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,20 @@ async def lifespan(_app: FastAPI):
         task.cancel()
         with suppress(asyncio.CancelledError):
             await task
+        if maritime_engine is not None:
+            maritime_engine.dispose()
 
 
 app = FastAPI(title="SEA THE ANSWER API", version="1.4.0", lifespan=lifespan)
+
+# Maritime data tool (backend/maritime_data, ADR 0008). Mounted only when its server-only
+# bearer token is configured. Registered before the /api/{path} catch-all so it wins routing.
+maritime_engine = None
+if os.getenv("MARITIME_DATA_API_TOKEN"):
+    from maritime_data.api import create_engine_for, create_router
+
+    maritime_engine = create_engine_for(os.getenv("MARITIME_DATA_DATABASE_URL") or os.getenv("DATABASE_URL", ""))
+    app.include_router(create_router(maritime_engine, os.environ["MARITIME_DATA_API_TOKEN"]))
 csrf_token = token_hex(32)
 sessions: dict[str, dict] = {}
 login_attempts: dict[str, dict] = {}
@@ -54,7 +65,7 @@ INITIALIZE_LOCK_KEY = 782315201027
 
 def backup_directory() -> Path:
     value = os.getenv("HAEDAP_BACKUP_DIR")
-    return Path(value).resolve() if value else ROOT / "backend/data/backups"
+    return Path(value).resolve() if value else BACKEND_DIR / "data/backups"
 
 
 def initialize(db: Workspace) -> None:
@@ -264,8 +275,7 @@ def post_route(db: Workspace, user: dict, guest: dict, path: str, body: dict, re
     if path == "operations/example":
         db.permit(user)
         require(not db.ships() and not db.operations(), "빈 작업공간에서만 예시를 넣을 수 있습니다.")
-        content = (ROOT / "backend/sample-data.mjs").read_text(encoding="utf-8")
-        sample = json.loads(content.split("=", 1)[1].strip().rstrip(";"))
+        sample = json.loads((BACKEND_DIR / "knowledge/sample-data.json").read_text(encoding="utf-8"))
         for ship in sample["ships"]:
             db.change(user, "ship.save", {**ship, "sample": True})
         for row in sample["records"]:

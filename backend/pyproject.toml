@@ -1,14 +1,29 @@
 [project]
 name = "sea-the-answer-backend"
 version = "1.4.0"
-description = "SEA THE ANSWER FastAPI backend"
-requires-python = ">=3.11,<3.15"
+description = "SEA THE ANSWER FastAPI backend (workspace API + maritime data tool)"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "fastapi>=0.115,<1",
-    "uvicorn>=0.30,<1",
+    "uvicorn>=0.34,<1",
     "psycopg[binary]>=3.2,<4",
-    "httpx>=0.27,<1",
+    "httpx>=0.28,<1",
+    # maritime_data
+    "sqlalchemy>=2.0,<3",
+    "python-dotenv>=1,<2",
 ]
 
 [dependency-groups]
 dev = ["pytest>=8,<10"]
+# Offline data preparation scripts in maritime_data/scripts (not needed at runtime).
+data = ["openpyxl==3.1.5", "pandas>=2.2,<3"]
+
+[tool.uv]
+# Application, not a library: `uv sync` installs dependencies only; modules run from this folder.
+package = false
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests", "maritime_data/tests"]
+addopts = "-p no:cacheprovider"
