@@ -3,6 +3,8 @@
 > 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-08 (`backend/db.mjs`, `backend/workspace.mjs`, `backend/maritime_data/schema/schema.sql` 대조)
 > 테이블·필드·상태 값을 바꾸면 같은 작업에서 이 문서를 고치고, 되돌리기 어려운 변경이면 ADR을 남깁니다.
 
+> 2026-10-13 현재 실행 저장소는 `backend/pyapi/schema.sql`의 PostgreSQL이다. 아래 Node/SQLite 전용 설명은 이전 구현 기록이다. 이번 전처리 작업은 테이블/컬럼을 바꾸지 않는다. `chunks.document_id`로 문서 제목을, `chunk_pages.id`로 물리 페이지를 조회한다. 기존 `haedap-chunk-v1` 문서 해시와 청크 ID를 유지하고 기존 개정본의 청크는 재작성하지 않는다. 새 문서·새 내용 개정의 분할 규칙만 [전처리 계약](specs/api.md#python-문서-전처리-계약-2026-10-13-확정)에 따라 달라진다.
+
 ## 1. 저장소 개요
 
 - **엔진**: Node.js 내장 `node:sqlite`(`DatabaseSync`), 파일 하나. `PRAGMA journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000`.

@@ -4,6 +4,8 @@
 
 ## 변경 이력
 
+- **문서 전처리 / 2026-10-13**: Python `backend/rag_preprocessing.py`를 추가하고 `Workspace.save_document`의 고정 길이 청킹을 교체. 페이지 보존, 조항/문장 경계 분할, 반복 running header/footer 제거, 표 행/숫자 보존. API·테이블·개정 해시·기존 청크는 유지. [구현·실행·머지 안내](plans/2026-10-13-rag-preprocessing.md).
+
 - **역할4 PR 최신 main 반영 / 2026-10-08**: 팀 PR #5(main `18831cb`, 기본 앱 1.4.0)를 병합하고 역할4 문서 충돌 해결. Next.js 공개 진입점(5173)·내부 API(8000)·선택 Python Tool(8001)의 경계에 맞춰 문서를 갱신. 팀의 채택 ADR 0005~0007을 보존하고 역할4 연결 제안은 [ADR 0008](adr/0008-maritime-data-tool-boundary.md)로 이동. 역할4 핵심 로직·DB 정의와 최신 팀 Node/Next.js 코드는 그대로 유지.
 - **역할4 PR 구조 정리 / 2026-10-08** (기본 앱 버전 유지): 팀 main의 문서·소스 구조를 반영. Python 해사 Tool을 `backend/maritime_data/`로 옮기고 import·실행·적재 경로를 갱신. 역할4 API·데이터 계약은 `specs/`, PostgreSQL 테이블·ERD는 `data-model.md`, 설치·원본 확보·이전 안내는 `user-guide.md`에 통합. 생성기는 DDL·dictionary만 출력하도록 수정하여 설명 문서를 덮어쓰지 않음. 문서 목록·정리 계획·[ADR 0008 제안](adr/0008-maritime-data-tool-boundary.md) 추가. 조회·계산 로직·DB 스키마·기존 Node 앱 코드는 변경하지 않음.
 
@@ -20,6 +22,20 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-13 — Python 문서 전처리
+
+Windows / Node.js 24.21.0 / Python 3.13.15 / PostgreSQL 17 / 설치된 Edge headless.
+
+| 검증 | 결과 |
+|---|---|
+| Python 기존 API + 전처리 | 27개 통과 |
+| 실제 PostgreSQL API 회귀 | 2개 통과: 페이지·제목·인용, 중복/개정/이전 청크 보존, 권한, 삭제, 실패 롤백 |
+| 실제 PDF | Part 5D 물리 20/21/22쪽(21청크), Part 6 물리 23/30/31쪽(13청크)의 API 저장·검색·원본 PDF 반환 통과. 검증 스키마 롤백 |
+| `npm test` | Node 33개 중 32개 통과, 기존 Windows launcher 테스트의 `taskkill /T /F` 종료 코드 128로 실패. 이 단계의 실패 때문에 npm의 후속 Python 단계는 실행되지 않음 |
+| `node scripts/run-python-tests.mjs` | 별도 실행: 27개 통과, 실 DB 환경변수 미설정 2개 skip |
+
+FastAPI TestClient의 기존 httpx 관련 사용 중단 경고 1개가 발생한다. UI 코드는 변경하지 않아 build/기존 브라우저 smoke는 수행하지 않았다. 실제 PDF 추출은 Playwright에서 현재 `frontend/src/lib/pdf.js` 함수를 실행했고 저장/검색은 FastAPI TestClient + 실제 PostgreSQL로 확인했다. UI 화면 클릭을 포함한 전체 업로드 테스트와 전체 검색 정확도 평가는 별도이다. 기존 README/설계 문서 일부에 Node/SQLite 설명이 남아 있어 현재 Python 경로와의 차이를 아키텍처·데이터 모델 상단에 명시했다.
 
 ### 2026-10-08 — 역할4 PR 최신 main 반영
 

@@ -3,6 +3,14 @@
 > 대상 버전: 1.4.0 · 최종 확인: 2026-10-08 (코드 대조)
 > 이 문서는 **현재 구현**을 설명합니다. 앞으로 바꿀 계획은 [`plans/`](plans/), 바뀌지 않을 결정의 이유는 [`adr/`](adr/)에 있습니다.
 
+## 현재 Python 문서 경로 (2026-10-13)
+
+현재 `feature/rag`의 실행 코드는 `backend/pyapi/workspace_api.py`(FastAPI)와 `workspace_store.py`(PostgreSQL)이다. 아래의 Node/SQLite 구조 설명은 이전 구현 기록이며 Python 경로 설명과 다르다. 이 문서의 전면 개편은 팀 구조 변경과 함께 정리한다.
+
+문서 등록: `frontend/src/lib/pdf.js`가 브라우저에서 페이지별 텍스트를 추출 → `controller.jsx`에서 사용자가 검토한 본문을 sections로 변환 → `POST /api/changes` (`document.save`) → `Workspace.save_document` → `backend/rag_preprocessing.py` → 기존 `documents`, `chunks`, `chunk_pages`, `document_files` 저장. 원본 PDF는 기존과 같이 base64로 보존하며 외부 추출 서비스에 보내지 않는다.
+
+전처리는 웹·DB 의존성이 없는 함수이고 문서 ID·제목은 저장 계층에서 기존 관계로 연결한다. 청킹 규칙과 변경 적용 범위는 [API 전처리 계약](specs/api.md#python-문서-전처리-계약-2026-10-13-확정), 검증과 향후 `refactor/split-packages` 연결 지점은 [작업 기록](plans/2026-10-13-rag-preprocessing.md)에 있다. 검색은 Python의 단어 포함 점수이며 FTS5/BM25나 벡터 검색을 이번 작업에서 추가하지 않는다.
+
 ## 1. 한눈에 보기
 
 해답은 한 대의 PC에서 도는 **로컬 웹 애플리케이션**입니다. 프로세스는 두 개이고, 사용자는 **Next.js 주소 하나**(기본 `http://127.0.0.1:5173`)로만 접속합니다. Next.js가 화면을 그리고, `/api/*` 요청은 `rewrites`로 내부 API 서버(`127.0.0.1:8000`)에 넘깁니다([ADR 0006](adr/0006-nextjs-entry-rewrites-to-api.md)).

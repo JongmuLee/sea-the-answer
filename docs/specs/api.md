@@ -109,6 +109,19 @@
 
 문서 삭제는 행을 지우지 않고 `status:'deleted'`로 검색·열람에서 제외합니다. 페이지 번호 없는 기존 자료는 `페이지 미지정`으로 표시합니다.
 
+### Python 문서 전처리 계약 (2026-10-13 확정)
+
+현재 등록은 `POST /api/changes`의 `kind: "document.save"`이다. PDF.js가 만든 페이지별 `sections`와 선택적 `file`을 받고, `backend/pyapi/workspace_store.py`가 저장한다. raw PDF만 보내는 새 업로드 API는 추가하지 않는다.
+
+`backend/rag_preprocessing.py`의 `preprocess_sections(sections, max_chars=900)`은 DB·웹 프레임워크에 의존하지 않고 `{page, heading, text}` 목록을 반환한다. 저장 시 기존 개정 ID와 순서로 청크 ID를 만들며 제목은 `documents`와 조인하여 반환한다.
+
+- 페이지와 입력 절을 넘겨 본문을 합치지 않는다. 물리 페이지 번호 또는 기존 NULL을 유지한다.
+- 줄바꿈/비분리 공백을 정리하되 조항 번호·숫자·기호와 표의 내부 공백·줄은 보존한다. OCR·수식 복원·단어 하이픈 결합은 하지 않는다.
+- 명시적인 Part/Chapter/Section 머리말과 ABS 규정 꼬리말이 3개 이상 서로 다른 페이지 가장자리에서 반복될 때만 제거한다. 제거한 머리말 중 가장 구체적인 절 제목은 `heading`에 보존한다. 본문 중간의 같은 문구와 조항 제목은 보존한다.
+- 번호 있는 짧은 조항 제목과 TABLE/FIGURE 제목은 별도 블록을 시작하고 `heading`에 반영한다. 긴 블록은 문단→문장→줄→공백 경계 순으로 최대 길이 안에서 나눈다. 표 블록은 문장보다 줄 경계를 우선한다. 경계가 없는 긴 문자열만 강제 분할한다.
+- 기존 문서 hash와 `unchanged` 판정을 유지한다. 이미 등록된 동일 문서/재활성화된 이전 개정본의 청크는 다시 쓰지 않는다. 변경된 청킹은 새 문서·새 내용의 개정부터 적용된다. 기존 청크를 바꾸는 재색인은 별도 작업이다.
+- API 응답·PostgreSQL 테이블·열람 범위·인용 검증은 그대로 유지한다. 검색은 현재 Python의 단어 포함 점수 방식이다.
+
 CLI 수집(`npm run ingest -- <file>`)은 위 `document` 객체의 배열(1~100개)을 받습니다. 예시: `backend/knowledge/seed.json`.
 
 ## 5. 오류 형식
