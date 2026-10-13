@@ -1,6 +1,6 @@
 # 해사 데이터 Tool·마이그레이션·기존 선박 모델 통합
 
-- 상태: 진행 중
+- 상태: 완료
 - 작성: 2026-10-13 · 역할4
 - 담당: 손태호 (역할4) · 팀 리뷰 후 통합
 - 관련: [ADR 0011 제안](../adr/0011-maritime-backend-integration.md), [데이터 모델](../data-model.md#9-postgresql-해사-데이터-tool-선택), [API 계약](../specs/maritime-data-api.md), [데이터 계약](../specs/maritime-data.md)
@@ -23,7 +23,7 @@
   - 완료 조건: 동일 정체성만 재연결, 삭제·불일치는 NULL 및 처리 건수 기록, 해사 원본은 JSON 백업 제외
 - [x] 관련 문서·의존성·예제와 검증 기록 정합성 확인
   - 완료 조건: 현재 코드 경로와 명령 대조, 실행한 결과만 changelog에 기록
-- [ ] PR 제출
+- [x] PR 제출
   - 완료 조건: diff·민감정보·테스트·미검증 범위 검토 후 팀 기준 브랜치에 제출
 
 ## 검증 계획
@@ -58,3 +58,5 @@ backend pytest, 준비 스크립트 테스트, 임시 PostgreSQL의 fresh/legacy
 ## 진행 기록
 
 - 2026-10-13: `refactor/split-packages` 기준에서 피드백 반영 시작. 기존 채택 ADR의 본문은 유지하고 새 ADR 0011을 제안했다. 검증 결과는 완료 후 [changelog](../changelog.md)에 기록한다.
+
+- 2026-10-13: 최종 backend 134개(실 DB 생략 0), frontend 4개·빌드, 깨끗한 Chromium 16단계 검증을 기록하고 [팀 PR #9](https://github.com/dudco/sea-the-answer/pull/9)를 제출했다. 기준은 PR #8의 refactor/split-packages이며, 팀 main 병합은 수행하지 않았다.
