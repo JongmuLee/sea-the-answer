@@ -276,7 +276,7 @@ class Workspace:
         return {"id": doc_id}
 
     def ships(self) -> list[dict]:
-        return [{**row["body"], "version": row["version"]} for row in self.all("SELECT * FROM ships ORDER BY id")]
+        return [{**row["body"], "version": row["version"]} for row in self.all("SELECT * FROM ships ORDER BY seq,id")]
 
     def operations(self) -> list[dict]:
         return [{**row["body"], "version": row["version"]}
@@ -349,7 +349,7 @@ class Workspace:
             require((old or {}).get("version", 0) == payload.get("version", 0), "선박 정보가 변경되었습니다.", "VERSION_CONFLICT", 409)
             saved = (self.one("UPDATE ships SET body=%s,version=version+1 WHERE id=%s AND version=%s RETURNING version",
                               (Jsonb(ship), ship["id"], old["version"])) if old else
-                     self.one("INSERT INTO ships VALUES(%s,%s,1) ON CONFLICT DO NOTHING RETURNING version",
+                     self.one("INSERT INTO ships(id,body,version) VALUES(%s,%s,1) ON CONFLICT DO NOTHING RETURNING version",
                               (ship["id"], Jsonb(ship))))
             require(saved, "선박 정보가 변경되었습니다.", "VERSION_CONFLICT", 409)
             return ship
