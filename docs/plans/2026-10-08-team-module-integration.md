@@ -31,11 +31,14 @@
 
 ### 1단계 — LLM 공급자 추상화
 
-- [ ] `rag.mjs`의 OpenAI 전용 호출을 공급자 인터페이스로 분리 (`OPENAI_*` 호환 유지)
-- [ ] 동국 AI CHAT API 공급자 추가 — 엔드포인트·인증·모델명은 `.env`로 (`HAEDAP_LLM_PROVIDER` 등, 이름은 명세에서 확정)
-- [ ] OpenAI 호환 Local LLM 엔드포인트(AWS) 공급자 추가
-- [ ] 명세 작성: `specs/llm-provider.md` (입력·출력·타임아웃·실패 시 동작)
-- [ ] ADR: 기본 공급자와 키 관리 방식
+2026-10-13 팀장 지시에 따른 [전환 작업](2026-10-13-openai-compatible-chat.md)은 #8 이후 `backend/api/`에서 진행합니다. 위 1.3.1 표와 다른 단계의 Node 경로는 최초 작성 당시 기준입니다.
+
+- [x] Python API의 Responses 호출을 공통 Chat Completions로 전환 (`api/llm.py`, `LLM_API_BASE_URL`·`LLM_RESPONSE_FORMAT`, 기존 `OPENAI_MODEL` 유지)
+- [x] URL 호스트에 따라 `OPENAI_API_KEY`·`DONGUK_AI_CHAT_API_KEY`를 격리하고 로컬 서버에는 두 키를 전송하지 않는 동작을 모의 HTTP로 검증
+- [ ] 실제 동국 AI Chat 주소·모델·인증 확보와 실접속 확인
+- [ ] 실제 로컬 Ollama 연결·유효 인용 확인
+- [x] [공급자 계약](../specs/llm-provider.md) 작성
+- [x] [ADR 0013](../adr/0013-provider-credential-isolation.md): 공통 통신 경계·공급자 키 격리 (0012 대체)
 - 완료 조건: 모의 공급자 테스트 통과 + 실제 1개 공급자로 인용 검증을 통과한 답변 1건을 `changelog.md`에 날짜와 함께 기록
 
 ### 2단계 — 하이브리드 검색
@@ -77,7 +80,7 @@
 
 | 경로 | 단계 |
 |---|---|
-| `backend/rag.mjs`, `.env.example` | 1 |
+| `backend/api/llm.py`, `backend/api/config.py`, `backend/api/store/answers.py`, `compose.yaml`, `.env.example` | 1 |
 | `backend/db.mjs`, `backend/knowledge.mjs`, `docs/data-model.md` | 2, 3 |
 | `frontend/src/lib/pdf.js`(또는 새 추출 모듈), `frontend/src/views/forms.jsx` | 3 |
 | `backend/analysis.mjs`, `backend/tools.mjs` | 4, 5, 6 |

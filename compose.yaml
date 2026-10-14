@@ -38,7 +38,10 @@ x-migrate: &migrate
 x-backend-env: &backend-env
   # Optional: grounded model responses (server-side only).
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  DONGUK_AI_CHAT_API_KEY: ${DONGUK_AI_CHAT_API_KEY:-}
   OPENAI_MODEL: ${OPENAI_MODEL:-}
+  LLM_API_BASE_URL: ${LLM_API_BASE_URL:-}
+  LLM_RESPONSE_FORMAT: ${LLM_RESPONSE_FORMAT:-text}
   # Optional: mounts /api/maritime-data/* (ADR 0008). Empty = disabled.
   MARITIME_DATA_API_TOKEN: ${MARITIME_DATA_API_TOKEN:-}
   MARITIME_DATA_DATABASE_URL: ${MARITIME_DATA_DATABASE_URL:-}

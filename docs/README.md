@@ -29,6 +29,7 @@
 
 | 문서 | 상태 |
 |---|---|
+| [`specs/llm-provider.md`](specs/llm-provider.md) — Chat Completions 공통 설정·공급자 키 격리·인용 검증 | 구현됨 (실제 공급자 미검증) |
 | [`specs/api.md`](specs/api.md) — HTTP API, 인증·쓰기 보호, 문서 등록 payload | 구현됨 |
 | [`specs/integrated-answer.md`](specs/integrated-answer.md) — `/api/ask` 입력·출력, CII·기준 비교 계약 | 구현됨 |
 | [`specs/tools.md`](specs/tools.md) — 독립 PostgreSQL 조회·계산·조회 도우미 계약 | 구현됨 |
@@ -38,6 +39,7 @@
 
 | 문서 | 상태 |
 |---|---|
+| [`plans/2026-10-13-openai-compatible-chat.md`](plans/2026-10-13-openai-compatible-chat.md) — 모델 호출 전환·#11 검토 반영·CI 분리·후속 PR | 진행 중 |
 | [`plans/2026-10-13-rag-preprocessing.md`](plans/2026-10-13-rag-preprocessing.md) — Python 해사 문서 전처리·청킹 및 새 구조 통합 | 완료 |
 | [`plans/2026-10-08-team-module-integration.md`](plans/2026-10-08-team-module-integration.md) — RAG·LLM·Tool 팀 모듈 연결 로드맵 | 초안 |
 | [`plans/2026-10-08-tools-and-data-preparation-docs.md`](plans/2026-10-08-tools-and-data-preparation-docs.md) — 역할4 PR 문서·모듈 구조 정리 | 완료 |
@@ -59,6 +61,8 @@
 | [0009](adr/0009-split-packages-and-compose.md) | frontend·backend 독립 패키지 + 최상위 docker compose + `e2e/` | 채택 (DB 초기화는 0010으로 대체) |
 | [0010](adr/0010-dbmate-migrations.md) | DB 스키마를 최상위 `migrations/` SQL 파일 + dbmate로 관리 | 채택 |
 | [0011](adr/0011-tools-runtime-and-data-preparation.md) | 해사 runtime·준비 작업 분리와 공통 마이그레이션·명시적 선박 연결 | 제안 |
+| [0012](adr/0012-openai-compatible-chat-completions.md) | OpenAI 호환 Chat Completions 공통 호출과 로컬 인용 검증 | 대체됨(0013) |
+| [0013](adr/0013-provider-credential-isolation.md) | 공통 LLM 설정과 URL 호스트에 따른 공급자별 인증키 격리 | 채택 |
 
 ## 작성 규칙 요약
 
