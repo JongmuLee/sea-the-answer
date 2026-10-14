@@ -4,6 +4,8 @@
 
 ## 변경 이력
 
+- **문서 전처리 / 2026-10-13**: Python 전처리 모듈과 페이지·조항·문장 경계 청킹을 구현. 최신 main 통합에서는 모듈을 `backend/api/rag_preprocessing.py`로 옮기고 `api/store/documents.py`에 연결했다. API·테이블·개정 해시·기존 청크를 유지하며 검증 도구도 backend/pytest·e2e 패키지로 재배치했다. [구현·실행·머지 안내](plans/2026-10-13-rag-preprocessing.md).
+
 - **추가 팀 피드백 반영 / 2026-10-13**: 중복된 `maritime_data` 코드 하위 폴더를 제거해 런타임을 `backend/tools/`, 사전 자료 준비를 `scripts/` 바로 아래로 이동했다. import·모듈 실행 명령·저장소 기준 기본 경로를 함께 수정했다. 명세는 `tools.md`(호출·조회·계산)와 `prepare-data.md`(사전 수집·전처리·적재)로 구분하고 관련 ADR·계획 파일명과 색인을 갱신했다. DB 스키마·API URL·응답 계약은 유지한다.
 
 - **역할4 피드백 반영 / 2026-10-13** (버전 유지, [ADR 0011 제안](adr/0011-tools-runtime-and-data-preparation.md)): 실행 Tool을 backend/tools, 준비·적재 스크립트를 최상위 scripts로 분리. 새 dbmate migration으로 해사 DDL을 통합하고 기존 public.ships와 명시적으로 연결한다. MRV·합성 Noon·출처·품질 모델과 API 계약은 유지한다. 기존 데이터 채택·비어 있지 않은 대상 재적재/rollback 거절, 앱 복구 시 연결 보존/해제 기록, 연결된 선박 식별정보 변경 보호를 추가했다.
@@ -29,6 +31,37 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-13 — RAG 최신 main 통합 검증
+
+기준 `upstream/main` `196ad73` + RAG `9d6b4c2`. Windows / Node.js 24.21.0 / Python 3.13.15 / PostgreSQL 17.11 / Playwright 1.62.1. 삭제/수정 2개와 내용 2개, 총 4개 파일의 충돌을 해결했다. 전처리 로직은 내용 변경 없이 `backend/api/rag_preprocessing.py`로 이동했고 `DocumentStore.save_document`에 연결했다. 팀의 frontend·tools·마이그레이션·의존성 잠금 파일은 그대로 유지한다.
+
+| 검증 | 결과 |
+|---|---|
+| backend 전체 pytest (격리 PostgreSQL 포함) | **151 passed, 4 skipped**, 기존 Starlette/httpx 경고 1개. 건너뛴 4개는 별도 해사 원본 데이터셋을 요구하는 조회 테스트 |
+| 기본 `uv run --locked pytest -q` (DB 테스트 변수 없음) | 95 passed, 60 skipped. DB 회귀는 위 격리 서버에서 별도로 활성화 |
+| frontend `npm test`, `npm run build` | **4 passed**, production standalone 빌드 성공 |
+| 실제 PDF 검증 | Part 5D 물리 20/21/22쪽 → 21청크, Part 6 물리 23/30/31쪽 → 13청크. 새 API의 저장·검색 문서명/페이지·원본 PDF 반환 통과, 임시 스키마 롤백 |
+| 기존 브라우저 e2e | 독립 포트의 FastAPI + production standalone + 빈 PostgreSQL에서 전체 시나리오 통과. `e2e/test-results/.last-run.json`: `passed`, 실패 목록 없음 |
+| Git 검사 | 충돌 표시 제거, `git diff --check` 통과. 머지 변경은 스테이징하고 커밋·푸시는 하지 않음 |
+
+기존 `.env` 계정으로 전체 DB 회귀를 켠 첫 시도는 임시 데이터베이스 생성 권한 부족으로 54개 setup 오류(97 passed, 4 skipped)가 났다. 계정 권한을 변경하지 않고 별도의 임시 PostgreSQL 클러스터로 전환해 위 결과를 얻었다. RAG 전용 2개 DB 테스트는 기존 계정에서도 임시 스키마 롤백 방식으로 통과했다.
+
+Docker 실행 파일이 없어 지정된 compose e2e 명령은 실행하지 못했다. 대신 실제 두 migration의 up SQL을 빈 검증 DB에 적용하고 Dockerfile과 같은 standalone/static/public 배치로 브라우저 테스트를 수행했다. Docker 이미지 빌드·컨테이너 실행과 dbmate CLI 자체는 이번 검증 범위 밖이다. 브라우저 설치 완료 전 첫 e2e 시도는 실행 파일 미존재로 실패했고, 설치 후 통과했다. 마지막 로컬 실행기는 통과한 Playwright 결과를 터미널에 출력할 때 Windows CP949 인코딩 오류가 났으나, Playwright가 남긴 성공 결과와 실패 목록 없음은 별도로 확인했다. 테스트 서버는 모두 종료했고 로그·검증용 DB 파일은 Git 제외 `.verification/`에 보존했다. 사용자 DB의 기존 문서·설정, `.env`, PDF 원본은 보존했으며 외부 LLM은 호출하지 않았다.
+
+### 2026-10-13 — Python 문서 전처리
+
+Windows / Node.js 24.21.0 / Python 3.13.15 / PostgreSQL 17 / 설치된 Edge headless.
+
+| 검증 | 결과 |
+|---|---|
+| Python 기존 API + 전처리 | 27개 통과 |
+| 실제 PostgreSQL API 회귀 | 2개 통과: 페이지·제목·인용, 중복/개정/이전 청크 보존, 권한, 삭제, 실패 롤백 |
+| 실제 PDF | Part 5D 물리 20/21/22쪽(21청크), Part 6 물리 23/30/31쪽(13청크)의 API 저장·검색·원본 PDF 반환 통과. 검증 스키마 롤백 |
+| `npm test` | Node 33개 중 32개 통과, 기존 Windows launcher 테스트의 `taskkill /T /F` 종료 코드 128로 실패. 이 단계의 실패 때문에 npm의 후속 Python 단계는 실행되지 않음 |
+| `node scripts/run-python-tests.mjs` | 별도 실행: 27개 통과, 실 DB 환경변수 미설정 2개 skip |
+
+FastAPI TestClient의 기존 httpx 관련 사용 중단 경고 1개가 발생한다. UI 코드는 변경하지 않아 build/기존 브라우저 smoke는 수행하지 않았다. 실제 PDF 추출은 Playwright에서 현재 `frontend/src/lib/pdf.js` 함수를 실행했고 저장/검색은 FastAPI TestClient + 실제 PostgreSQL로 확인했다. UI 화면 클릭을 포함한 전체 업로드 테스트와 전체 검색 정확도 평가는 별도이다. 기존 README/설계 문서 일부에 Node/SQLite 설명이 남아 있어 현재 Python 경로와의 차이를 아키텍처·데이터 모델 상단에 명시했다.
 
 ### 2026-10-13 - PR #9 최종 점검
 

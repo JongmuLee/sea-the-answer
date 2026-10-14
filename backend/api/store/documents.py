@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from psycopg.types.json import Jsonb
 
 from ..errors import ApiError, require
+from ..rag_preprocessing import preprocess_sections
 from ..validation import iso_date, sha256, stamp, text
 
 SEARCH_SYNONYMS = (
@@ -99,15 +100,11 @@ class DocumentStore:
                 reviewed_at,language,active) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)""",
                 (revision_id, logical_id, digest, title, raw["kind"], raw.get("url"), reference,
                  version, reviewed, raw.get("language", "ko")))
-            position = 0
-            for section in raw["sections"]:
-                content = section["text"]
-                for piece in [content[i:i+900] for i in range(0, len(content), 900)]:
-                    position += 1
-                    chunk_id = f"{revision_id}-{position}"
-                    self.run("INSERT INTO chunks VALUES(%s,%s,%s,%s,%s)",
-                             (chunk_id, revision_id, position, section["heading"], piece))
-                    self.run("INSERT INTO chunk_pages VALUES(%s,%s)", (chunk_id, section.get("page")))
+            for position, chunk in enumerate(preprocess_sections(raw["sections"]), 1):
+                chunk_id = f"{revision_id}-{position}"
+                self.run("INSERT INTO chunks VALUES(%s,%s,%s,%s,%s)",
+                         (chunk_id, revision_id, position, chunk["heading"], chunk["text"]))
+                self.run("INSERT INTO chunk_pages VALUES(%s,%s)", (chunk_id, chunk["page"]))
         next_meta = {"scope": meta.get("scope", "all"), "status": meta.get("status", "active"),
                      "issuer": meta.get("issuer", ""), "issuedAt": meta.get("issuedAt", ""),
                      "revisedAt": meta.get("revisedAt", ""), "applicability": meta.get("applicability", ""),
