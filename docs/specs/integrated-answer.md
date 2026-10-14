@@ -1,7 +1,7 @@
 # 통합 답변 (`POST /api/ask`)
 
 - 상태: 구현됨 (1.3.1)
-- 최종 확인: 2026-10-08 (`backend/analysis.mjs`, `backend/rag.mjs` 대조)
+- 최종 확인: 2026-10-13 (`backend/api/store/answers.py`, `backend/api/llm.py`, Python 모의 HTTP 테스트 대조)
 - 관련: [`api.md`](api.md), [`../architecture.md`](../architecture.md#23-통합-질문-post-apiask), [`../plans/2026-10-08-team-module-integration.md`](../plans/2026-10-08-team-module-integration.md)
 
 ## 1. 목적
@@ -53,7 +53,7 @@
 
 ### 인용 규칙 (LLM 모드)
 
-- 모델 출력은 JSON schema(`insufficient`, `statements[{text, chunkId, quote}]`, 최대 5개)로 강제합니다.
+- 모델은 OpenAI 호환 Chat Completions로 호출합니다. JSON 출력 강제는 공급자 지원에 따라 선택하며 앱은 항상 `insufficient`와 `statements[{text, chunkId, quote}]`(최대 5개)의 타입·원문 인용을 검증합니다. 설정·호출 계약은 [`llm-provider.md`](llm-provider.md)를 따릅니다.
 - 각 `quote`는 8자 이상이며 해당 `chunkId` 원문에 **그대로 포함**되어야 합니다. 하나라도 어기면 전체를 폐기하고 발췌 모드로 되돌립니다.
 - 질문과 근거는 데이터로만 취급하며, 근거로 답할 수 없으면 `insufficient:true`.
 
@@ -77,7 +77,7 @@
 
 ## 5. 교체 시 지켜야 할 것
 
-- 검색 입력 단계에서 `allowedDocs(user)`로 열람 범위를 적용할 것
+- 검색 입력 단계에서 `allowed_document_ids(user)`로 열람 범위를 적용할 것
 - `statements`의 모든 문장이 `evidence`의 청크를 인용할 것
 - `queries`·`query_owner`에 기록해 이력 재열람이 되게 할 것
 - 근거 없는 CII 값·규정 판정을 만들지 말 것
@@ -86,9 +86,9 @@
 
 `backend/tests/`의 회귀 테스트로 확인되는 항목은 체크했습니다.
 
-- [x] 제한 문서는 검색 단계에서 제외된다 (`workspace.test.mjs` — document access enforcement before search)
-- [x] 설정된 LLM의 인용을 검증하고, 실패하면 명시적으로 발췌로 되돌린다 — 모의 응답 기준 (`backend.test.mjs`)
-- [x] 근거가 없으면 답변 문장을 만들지 않는다 (`backend.test.mjs`)
-- [x] 기준 비교가 met / unmet / unknown과 잘못된 근거 거부를 처리한다 (`workspace.test.mjs`)
+- [ ] 제한 문서 검색의 실 DB 회귀 검증 — 이전 Node 테스트는 #8에서 제거됨; 현재 검색의 권한 필터 코드는 유지
+- [x] 설정된 LLM의 인용을 검증하고 실패하면 발췌로 되돌린다 — 모의 HTTP와 실제 답변 오케스트레이션 기준 (`test_llm_provider.py`)
+- [x] 근거가 없으면 모델을 호출하지 않고 답변 문장을 만들지 않는다 (`test_llm_provider.py`)
+- [ ] 기준 비교의 met / unmet / unknown과 잘못된 근거 거부 전용 회귀 검증 — 이전 Node 테스트는 #8에서 제거됨; 이번 전환은 기준 비교를 변경하지 않음
 - [ ] 운항 분석 응답의 CII가 항상 `unavailable`인지 전용 테스트 추가 필요
 - [ ] 실제 외부 LLM 호출 검증

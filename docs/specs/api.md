@@ -10,6 +10,8 @@
 
 ### 전달 경로와 Host 규칙 (구현이 지켜야 할 것)
 
+`GET /api/health`의 `llmConfigured`는 [모델 공급자 설정](llm-provider.md)이 유효한지 표시합니다. 로컬 호환 서버는 키 없이 활성화할 수 있고 health는 모델 서버를 호출하지 않습니다. true여도 서버 도달·인증·모델 적재 성공을 보장하지 않습니다. `POST /api/ask`의 기존 응답 필드·모델 실패 경고 코드는 유지합니다.
+
 - API 서버(FastAPI)는 Next.js만 닿을 수 있는 곳에 둡니다. compose에서는 내부 네트워크의 `backend:8000`(호스트에 공개하지 않음), 직접 실행에서는 `127.0.0.1:8000`.
 - 실제 호스트 = `X-Forwarded-Host`(Next.js 프록시가 설정) 또는 `Host`. 호스트 이름이 `127.0.0.1`·`localhost`·`HAEDAP_ALLOWED_HOSTS` 중 하나가 아니면 403 `HOST_DENIED`. 포트는 검사하지 않습니다.
 - `Origin`이 있으면 `http://<실제 호스트>`와 같아야 하고, `Sec-Fetch-Site`가 `cross-site`/`same-site`면 거부합니다(403 `ORIGIN_DENIED`).

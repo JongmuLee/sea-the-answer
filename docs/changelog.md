@@ -4,6 +4,9 @@
 
 ## 변경 이력
 
+- **PR #11 검토 반영 / 2026-10-14** (1.4.0 유지, [ADR 0013](adr/0013-provider-credential-isolation.md)): URL·출력 형식 설정을 `LLM_API_BASE_URL`·`LLM_RESPONSE_FORMAT`으로 변경. `OPENAI_MODEL`·`OPENAI_API_KEY`는 유지하고 `DONGUK_AI_CHAT_API_KEY`를 분리했다. URL 호스트에 맞는 공급자 키만 선택하며 로컬 Ollama·기타 호환 서버에는 두 키가 있어도 인증 헤더를 보내지 않는다. CI 워크플로는 기능 변경에서 제거해 별도 PR로 분리한다. 최신 `main`의 RAG 전처리·문서 변경을 함께 보존했다. 기존 `.env`는 재시작 전 이름 변경이 필요하며 자동 수정하지 않는다. 실제 동국·Ollama 접속은 미검증.
+
+- **최초 PR #11의 OpenAI 호환 Chat Completions / 2026-10-13** (버전 유지, [ADR 0012](adr/0012-openai-compatible-chat-completions.md)): #8 머지본 `196ad73`에서 `api/llm.py`로 모델 통신·JSON·인용 검증 분리. 당시 `OPENAI_BASE_URL`·`OPENAI_RESPONSE_FORMAT` 추가, 기존 키·모델 이름 유지. 키 없는 로컬 호환 서버 활성화와 health·답변 설정 판정 통일, 실패·잘림·위조 인용은 기존 발췌 경고로 전환. `.env.example`·Compose·README·공급자 계약 갱신. 당시 PR에 검증 워크플로를 연결했으며 2026-10-14 검토에서 별도 PR로 분리. 동국·Ollama 실접속은 미검증.
 - **문서 전처리 / 2026-10-13**: Python 전처리 모듈과 페이지·조항·문장 경계 청킹을 구현. 최신 main 통합에서는 모듈을 `backend/api/rag_preprocessing.py`로 옮기고 `api/store/documents.py`에 연결했다. API·테이블·개정 해시·기존 청크를 유지하며 검증 도구도 backend/pytest·e2e 패키지로 재배치했다. [구현·실행·머지 안내](plans/2026-10-13-rag-preprocessing.md).
 
 - **추가 팀 피드백 반영 / 2026-10-13**: 중복된 `maritime_data` 코드 하위 폴더를 제거해 런타임을 `backend/tools/`, 사전 자료 준비를 `scripts/` 바로 아래로 이동했다. import·모듈 실행 명령·저장소 기준 기본 경로를 함께 수정했다. 명세는 `tools.md`(호출·조회·계산)와 `prepare-data.md`(사전 수집·전처리·적재)로 구분하고 관련 ADR·계획 파일명과 색인을 갱신했다. DB 스키마·API URL·응답 계약은 유지한다.
@@ -31,6 +34,43 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-14 — PR #11 검토 반영 (Windows)
+
+환경: 최신 `main`의 #10 머지본 `76620c7` 반영, Python 3.13.16·uv. 테스트에는 실제 모델 키를 사용하지 않았다.
+
+| 검증 | 실제 결과 |
+|---|---|
+| 모델 전용 모의 HTTP·API pytest | 94 통과. 두 공급자 키가 함께 있을 때 대상별 Bearer 헤더, Ollama 무인증, 키 누락·유사 도메인·URL 경로의 키 격리, 새 설정 이름·health·발췌 전환 검증 |
+| `backend/`에서 `uv run --locked --offline pytest -q --basetemp ../.verification/pytest-llm-review-20261014` | 189 통과, 실 PostgreSQL·데이터셋이 필요한 60 건너뜀. 기존 Starlette TestClient/httpx 사용 중단 경고 1건. 최초 실행의 Windows 임시 폴더 권한 오류는 전용 검증 폴더 재실행으로 해소 |
+| 문서·기능 변경 범위 | 최종 로컬 링크 171개·JSON 예제 2개와 `git diff --check` 통과. 최신 main 대비 CI 워크플로·frontend·e2e·migrations·의존성 변경 없음 |
+| 로컬 Compose e2e·정리 명령 | `docker compose --profile e2e up --build --force-recreate --exit-code-from e2e e2e` 및 `down`을 시도했으나 Docker 실행 파일이 없어 실행 불가 |
+| 실제 OpenAI·동국 AI Chat·Ollama 호출 | 수행하지 않음. 공급자 공식 접속 정보·실행 모델 환경에 대한 검증은 후속 항목 |
+
+제출: 검토 반영 기능은 [PR #13](https://github.com/dudco/sea-the-answer/pull/13), CI 워크플로는 [PR #14](https://github.com/dudco/sea-the-answer/pull/14)로 분리했다. PR #13은 최신 main 기준으로 CI 파일을 포함하지 않는다.
+
+같은 날 [기능 검증 Actions](https://github.com/cxo-ca/sea-the-answer/actions/runs/38518450553)가 성공했다. 검증 커밋 `2eeaffc`는 기능 커밋 `e72f1ce`에 별도 CI 워크플로만 추가한 것으로, 모델 코드·Compose·설정 예제는 동일하다. Linux / Python 3.13.16 / PostgreSQL 18에서 백엔드 **245 통과·실 데이터셋 4 건너뜀**, 프런트 **4개 통과·Next.js 16.3.8 빌드 성공**, 운영·개발·e2e Compose 검사 3종과 Docker Chromium e2e **1개 통과**를 확인했다. e2e 종료 코드 0, 테스트 컨테이너·네트워크 제거도 확인했다. 기존 Starlette/httpx 경고 1건이 있으며 실제 외부 모델 호출은 검증하지 않았다. 이후 제출 링크·결과 기록 변경은 문서에만 해당한다.
+
+별도 [CI 전용 Actions](https://github.com/cxo-ca/sea-the-answer/actions/runs/38518455486)도 커밋 `8112816`에서 성공했다. LLM 변경을 포함하지 않은 최신 main에 CI만 추가해 백엔드 **151 통과·실 데이터셋 4 건너뜀**, 프런트 테스트·빌드, Compose 3종, Docker e2e와 정리를 확인했다.
+
+### 2026-10-13 — 최초 PR #11의 Chat Completions 구현 (Windows)
+
+환경: #8 머지 커밋 `196ad73`, Python 3.13.16·uv 0.13.0·Node.js 24.21.0. 실행 도구는 프로젝트의 무시된 `.verification/`에 준비했고 backend 잠금 파일의 dev·data 의존성과 frontend `npm ci`를 설치했다. 개인 `.env`·DB·마이그레이션·패키지 잠금 파일은 수정하지 않았다.
+
+| 검증 | 실제 결과 |
+|---|---|
+| 모델 전용 pytest | 70 통과. 모의 HTTP로 OpenAI·사용자 지정 경로·키 없는 로컬 주소, JSON 옵션, 언어·인용·실패 전환·health와 실제 답변 오케스트레이션 검증 |
+| 전체 backend pytest (`--basetemp`는 프로젝트 내부 검증 폴더) | 147 통과, 실 PostgreSQL 연결·데이터셋이 필요한 58 건너뜀. Starlette TestClient/httpx 사용 중단 경고 1건 |
+| frontend `npm test` | 4 통과 |
+| frontend `npm run build` | Next.js 16.3.8 standalone 빌드 성공 |
+| 로컬 Docker Compose·e2e | Docker 실행 파일·데몬이 없어 실행하지 못함. PR 워크플로에 검증 연결 |
+| 실제 OpenAI·동국 AI Chat·Ollama 호출 | 수행하지 않음. 동국 웹 링크는 API 주소가 아니며 실제 API 정보·실행 모델 환경 미확보 |
+
+같은 날 최초 PR #11의 Linux GitHub Actions에서 커밋 `7d7f956`의 [검증 실행](https://github.com/cxo-ca/sea-the-answer/actions/runs/38408707402)이 성공했다. 백엔드 201 통과·실 해사 데이터셋 4 건너뜀(임시 PostgreSQL 18로 로컬에서 건너뛴 통합 테스트 포함), 프런트 단위 테스트·빌드 성공, 운영·개발·e2e Compose 구문 검사 성공, Docker의 격리된 DB→dbmate→FastAPI→Next.js→브라우저 14단계 흐름 1개 테스트 통과·정리 성공. 이는 2026-10-14 검토 반영 전 변경의 검증 기록이며 현재 변경 검증을 대신하지 않는다. 실제 모델 키·주소는 e2e에 전달하지 않았으므로 실제 공급자 연결 검증은 여전히 미검증이다.
+
+제출: 원본 저장소 직접 푸시 권한이 없어 본인 fork의 `feature/openai-compatible-chat`에서 [PR #11](https://github.com/dudco/sea-the-answer/pull/11)을 제출했다. 원본 PR의 Actions는 실행이 관찰되지 않아 활성화된 fork의 동일 워크플로로 검증했다. 개인 Git 전역 설정·원본 main·PR 병합은 변경하지 않았다. 준비 문서는 stash `c1c56bd`에도 보존했다.
+
+최초 모델 테스트의 메모리 DB 대역이 최신 advisory lock 질의를 처리하지 못해 실패했으며 대역을 보완한 뒤 70개가 통과했다. 전체 테스트는 샌드박스 임시 폴더 접근, 프런트 테스트는 자식 프로세스 실행 제한으로 실패한 뒤 승인된 실행으로 재검증했다. 이 환경 오류를 제품 코드 변경으로 우회하지 않았다.
 
 ### 2026-10-13 — RAG 최신 main 통합 검증
 

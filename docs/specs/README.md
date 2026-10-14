@@ -19,6 +19,7 @@
 
 | 문서 | 내용 | 상태 |
 |---|---|---|
+| [`llm-provider.md`](llm-provider.md) | Chat Completions 공통 설정·공급자 키 격리·출력 검증 | 구현됨 (실제 공급자 미검증) |
 | [`api.md`](api.md) | HTTP API 전체, 인증·쓰기 보호, 문서 등록 payload | 구현됨 (1.3.1) |
 | [`integrated-answer.md`](integrated-answer.md) | `POST /api/ask` 입력·출력, CII 표시, 기준 비교 | 구현됨 (1.3.1) |
 | [`tools.md`](tools.md) | backend Tool 조회·계산·조회 도우미, 독립 실행 호환 | 구현됨 (Tool 계약 v1) |
