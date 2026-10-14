@@ -14,7 +14,7 @@
 
 일반 기능은 로그인 없이 쓰고, 등록·수정·삭제·승인·백업은 관리자(기본 **`admin / 1234`**, 실제 사용 전에 변경)만 할 수 있습니다.
 
-**현재 구현 범위**: 문서 검색은 질문 단어가 청크에 포함된 개수로 순위를 매기는 단순 키워드 검색이고, 답변은 기본적으로 원문 발췌입니다. 선택적 LLM은 OpenAI 호환 Chat Completions로 연결하며 주소·모델·키 설정으로 OpenAI·동국 AI Chat·로컬 Ollama를 전환할 수 있습니다. 공통 호출은 모의 HTTP로 검증했고, 동국의 실제 API 정보와 실제 Ollama 연결은 아직 미검증입니다. 벡터·하이브리드 RAG, 공식 CII 계산, 규정 적용 자동 판정, DOCX·PPT 등록은 아직 연결 전입니다. 범위와 연결 계획은 [`docs/plans/2026-10-08-team-module-integration.md`](docs/plans/2026-10-08-team-module-integration.md)를 보세요.
+**현재 구현 범위**: 문서 검색은 열람 가능한 PostgreSQL 청크를 한영 토큰화·동의어 확장 후 BM25로 정렬하고, 답변은 기본적으로 원문 발췌입니다. 선택적 LLM은 OpenAI 호환 Chat Completions로 연결하며 주소·모델·키 설정으로 OpenAI·동국 AI Chat·로컬 Ollama를 전환할 수 있습니다. 공통 호출은 모의 HTTP로 검증했고, 동국의 실제 API 정보와 실제 Ollama 연결은 아직 미검증입니다. 벡터·하이브리드 RAG, 공식 CII 계산, 규정 적용 자동 판정, DOCX·PPT 등록은 아직 연결 전입니다. 범위와 연결 계획은 [`docs/plans/2026-10-08-team-module-integration.md`](docs/plans/2026-10-08-team-module-integration.md)를 보세요.
 
 ## 프로젝트 구조
 
@@ -121,6 +121,8 @@ docker compose run --rm migrate rollback             # 마지막 파일 되돌�
 이미 커밋된 마이그레이션 파일은 고치지 말고 항상 새 파일을 추가합니다. Docker 없이 하려면 `docker compose run --rm migrate` 대신 `npx --yes dbmate@2.36.0 -d migrations --no-dump-schema`를 씁니다. Linux에서 컨테이너로 만든 파일은 root 소유일 수 있으니 필요하면 `sudo chown`으로 바꾸세요.
 
 ## 테스트
+
+BM25 검색은 backend의 `rank-bm25` 의존성을 사용합니다. Docker에서는 `docker compose up --build -d`로 반영하고, 직접 실행할 때는 `backend/`에서 `uv sync` 후 백엔드를 재시작하세요. 이미 저장한 문서를 재등록하거나 DB를 변경할 필요는 없습니다. DB 없는 검색 단위 테스트는 `backend/`에서 `uv run pytest tests/test_rag_retrieval.py -q`로 실행합니다. 알고리즘·한계는 [검색 계약](docs/specs/api.md#문서-검색-bm25)에 있습니다.
 
 | 범위 | 위치 | 명령 |
 |---|---|---|
