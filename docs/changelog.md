@@ -262,3 +262,30 @@ Next.js 16.3.8 동작 확인(임시 에코 서버): rewrite 대상 주소는 `ne
 - 격리된 테스트 DB에서 dbmate up/status/재실행/빈 스키마 rollback/up과 실제 처리본 적재 확인: MRV 80,552행, Noon 4,380행, 실제 연간 View 79,032행, 앱 선박 자동 생성 0행. 데이터가 있는 rollback은 거절했다. 개인 DB와 원본은 변경하지 않았다.
 - `scripts.load_data`, `scripts.link_ship`의 CLI help, 새 경로의 필드 사전 생성, PowerShell 구문, 문서 내부 파일 링크, diff 공백 검증 통과.
 - 이번 추가 변경에서는 frontend·브라우저 e2e·Docker 실행을 재검증하지 않았다. 기존 검증 기록은 위 항목의 당시 결과다.
+
+## 2026-10-13 - MRV 제원 후보 연결 및 참고 지표 검증 (Windows)
+
+- **MRV 참고 탄소집약도 / 2026-10-13 (로컬·미제출)**: 공개 DWT 후보를 별도 capacity_candidates에 보존하는 추가 migration·미리보기/빈 테이블 적재 CLI와 서버 Bearer 전용 reference-intensity API를 추가했다. 단일 승인 MRV의 보고 CO₂·추정 거리·출처 충돌 없는 후보 DWT로 참고값을 계산하고, 공식 CII·등급은 계속 null이다. 기존 calculate 응답·기존 migration·원본·앱 테이블은 유지한다. 지원 선종은 Bulk carrier/Container ship/Oil tanker다.
+
+- 기준 main 196ad73108db, 로컬 codex/mrv-reference-intensity. 원격 푸시·PR 갱신·개인 DB 변경 없이 수행했다.
+- 전체 backend **170 passed, skipped 0**. 기존 Starlette/httpx 경고 1개. 단위·입력·인증·출처 충돌/결측/0·범위·숫자 정밀도·원본 불변·실 DB 회귀 포함.
+- dbmate 실제 실행: fresh up/status/reup, 빈 참조 migration down/up 통과. 참조 데이터 적재 후 down은 거절되고 전체 transaction이 보존됐다.
+- 기존 보유 CSV를 읽기만 하여 임시 DB에 source_files 6, vessels 25,252, MRV 80,552, Noon 4,380, voyages 238, quality_issues 26,249행 적재했다.
+- 별도 후보 CSV 25,240행 적재: DWT 후보 15,956척, 출처 간 5% 초과 충돌 137척을 상태로 보존. 파일 SHA256 f5b951b51992a70e8ce11a739a513fa1fbfafdcd5c84d90282ef74eaf256c01f.
+- 지원 3선종에서 단일 승인 보고·양수 CO₂/추정거리/DWT·제원 충돌 제외 조건을 만족하는 참고 산술 범위는 **28,131보고 / 8,934척**. 이는 공식 CII 산정 가능 범위·독립 검증된 입력 수가 아니다.
+- 실제 HTTP API 표본: REAL:IMO:7422881 / 2018, 보고 CO₂ 19545.24t, 후보 DWT 38997.0t, 추정거리 62541.32231404958677685950413nm → 참고값 8.013878 gCO₂/(DWT t·nm), status=estimated, 공식 등급 null. 기존 calculate는 동일 표본에서 blocked를 유지했다.
+- annual_reports·vessels·synthetic_noon 전체 행의 정렬 JSON 지문과 건수가 참조 적재/조회 전후 동일했다. 후보 CSV 해시 불변. 임시 DB는 검증 종료 후 삭제했다.
+- CLI help·문서 링크·diff 공백 확인 통과. 기존 커밋된 migration·의존성 잠금 파일은 변경하지 않았다.
+- 이번 변경은 서버 API 범위다. frontend·화면/LLM 어댑터·브라우저 e2e·Docker 실행·실제 개인 DB 적용은 미수행이며 기존 결과를 새 성공 기록으로 대체하지 않았다.
+
+## 2026-10-14 - MRV 참고 지표 PR 직전 전체 호환 점검
+
+- 기준 upstream/main 196ad73108db를 다시 fetch해 변경이 없음을 확인했다. 작업 브랜치는 codex/mrv-reference-intensity이며 원격에 푸시하지 않았다.
+- 팀 PR #11이 ADR 0012를 사용하므로 역할4 제안은 ADR 0013으로 번호·링크를 변경했다. 문서 삽입 위치를 조정한 뒤 PR #10(a6c29e4f)·#11(737c6314) 각각과 git merge-tree 충돌 0을 확인했다.
+- 두 팀 PR 자체를 합칠 때 docs/README·architecture·changelog·plans/README의 기존 문서 충돌 4곳이 있다. 이 팀 간 문서는 임시 코드 테스트 사본에서만 양쪽 내용을 보존했으며 팀 브랜치·실제 작업 브랜치에 병합하지 않았다.
+- 최종 자체 backend **174 passed, skipped 0**. 출처 5% 경계, SQL/비밀 오류 비노출, 참조 적재 중간 실패 전체 rollback, main 앱에서 새 경로 마운트 검증을 추가했다.
+- 임시 사본의 역할4 + PR #10 + PR #11 코드 조합에서 **264 passed, skipped 0**. 같은 실자료 임시 DB와 새 migration을 사용했다. 두 실행 모두 기존 Starlette/httpx 경고 1개.
+- frontend 단위 **4 passed**, production standalone build 성공. 실제 Next → FastAPI → PostgreSQL에서 기존 Chromium **1개 시나리오·16단계 통과**. Next 프록시를 통한 새 Bearer API 호출과 빈 데이터의 명시 blocked 응답도 통과했다.
+- 실자료 참조 적재·원본 지문 불변·기존 calculate blocked 보존·참조 데이터 존재 시 down 거절을 재확인했다. 지원 선종/계산 범위는 앞선 검증과 같은 28,131보고·8,934척이다.
+- 기존 migration 2개와 backend/frontend/e2e 잠금 파일 불변, 문서 링크·diff 공백 확인 통과. 개인 DB/원본 CSV 변경 없음. 소유 임시 DB와 서버/브라우저 프로세스 정리.
+- Docker 실행 파일이 없어 컨테이너 e2e는 실행하지 않았다. 실제 production 프로세스 e2e로 확인했으며 컨테이너 이미지 검증 성공으로 기록하지 않는다. 외부 LLM 실호출·화면 자동 연결·공식 CII·실제 개인 DB 적용은 제외한다.

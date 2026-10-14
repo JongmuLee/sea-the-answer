@@ -195,6 +195,8 @@ CI 워크플로는 [별도 PR #14](https://github.com/dudco/sea-the-answer/pull/
 
 ## 해사 데이터 Tool (선택)
 
+공개 DWT 후보를 별도로 연결해 MRV 보고 CO₂·추정 거리 기반 **참고 탄소집약도**를 제공한다. 참고값의 출처·시점/거리/DCS 범위 미검증과 계산 차단 사유를 함께 반환하며 공식 CII나 등급이 아니다. 참조 적재와 호출은 [사용 안내](docs/user-guide.md#dwt-후보를-참고-지표에-연결하기-선택), 계약은 [tools.md](docs/specs/tools.md)를 따른다. 이 기능은 서버 API이며 화면 자동 연결은 포함하지 않는다.
+
 읽기 전용 조회·CO₂ 계산은 [`backend/tools/`](backend/tools/), 자료 정규화·전처리·적재는 [`scripts/`](scripts/)에 있습니다. backend와 같은 uv 환경을 사용하고, 해사 DDL도 루트 `migrations/`에서 앱 DDL과 함께 적용합니다. 기본은 앱과 같은 DB입니다. 기존 `ships`와의 연결은 검토한 명시적 매핑만 허용하며, 연간 MRV를 일별 `operations`로 바꾸거나 외부 선박을 대량 자동 등록하지 않습니다.
 
 자료 준비 명령은 호스트 PC에서 실행하므로 Python·uv가 필요합니다. 먼저 [사용 안내의 DB 연결·migration 준비](docs/user-guide.md#마이그레이션전처리적재검증)를 따르세요. Docker DB를 쓸 때도 로컬 DB 포트와 호스트용 `DATABASE_URL`이 필요합니다.

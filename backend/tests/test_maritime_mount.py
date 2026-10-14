@@ -19,6 +19,12 @@ def test_maritime_routes_are_mounted_when_token_is_set(monkeypatch):
         assert client.get("/api/maritime-data/factors").status_code == 401
         response = client.get("/api/maritime-data/factors", headers={"Authorization": "Bearer " + TOKEN})
         assert response.status_code == 200
+        assert client.post('/api/maritime-data/reference-intensity', json={}).status_code == 401
+        response = client.post('/api/maritime-data/reference-intensity',
+            headers={'Authorization':'Bearer '+TOKEN},json={
+                'scope':{'dataset':'real_annual','vessel_id':'REAL:IMO:9074729','year':2023},
+                'accept_reference_limitations':True})
+        assert response.status_code == 503  # mounted, but this fixture has no PostgreSQL
     finally:
         module.maritime_engine.dispose()
         monkeypatch.delenv("MARITIME_DATA_API_TOKEN")

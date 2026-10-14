@@ -14,6 +14,7 @@ PostgreSQL 해사 데이터를 읽는 `backend/tools/`의 요청·응답·오류
 | `POST /api/maritime-data/query` | 승인 뷰의 조건 조회 | 필요 |
 | `GET /api/maritime-data/factors` | 고정 버전의 계수 카탈로그 | 필요 |
 | `POST /api/maritime-data/calculate` | CO₂ 산술 및 입력 준비 상태 | 필요 |
+| `POST /api/maritime-data/reference-intensity` | MRV 보고 CO₂·DWT 후보·추정거리 기반 참고 지표 | 필요 |
 | `POST /api/maritime-data/ask` | 고정 scope의 규칙 기반 조회 도우미 | 필요 |
 
 필드 계약과 오류는 아래에, 설치·실행은 운영 안내에 정의합니다.
@@ -158,6 +159,23 @@ CO2_t = Σ(연료종류별 사용량 t × CF). 기간 DWT 집약도 = CO2_t × 1
 응답은 `routing`, `actions`, `result`, `answer`, `warnings`입니다. 지원되는 요청은 고정 scope로 한 번 조회하고 `actions=["query_maritime_data"]` 및 조회 결과를 반환합니다. 계산·등급·쓰기·집계·비교·보고서 요청은 조회를 실행하지 않고 `actions=[]`, `result=null`, `UNSUPPORTED_MARITIME_DATA_REQUEST`를 반환합니다.
 
 독립 API의 모델 게이트웨이는 비활성입니다. `use_model=true`여도 외부 모델을 호출하지 않으며 `LLM_NOT_CONFIGURED` 경고와 규칙 기반 조회 결과를 반환합니다. 다른 Python 호출자가 자체 모델 게이트웨이를 제공하는 경우의 선택적 코드가 있으나 실제 모델 연결 검증 완료를 의미하지 않습니다.
+
+## MRV 기반 참고 탄소집약도 확장 (구현됨, 2026-10-13)
+
+`POST /api/maritime-data/reference-intensity`는 기존 계산과 분리된 참고 전용 계약이다. 동일한 서버 Bearer 인증을 적용한다.
+
+```json
+{"scope":{"dataset":"real_annual","vessel_id":"REAL:IMO:9074729","year":2023},"accept_reference_limitations":true}
+```
+
+- 단일 선박·연도만 허용하며 임의 DWT·CO₂·거리·SQL·연료 매핑은 받지 않는다. `accept_reference_limitations`는 정확한 boolean true만 허용한다.
+- real_annual_query의 단일 승인 FULL/ARCHIVE_ANNUAL 보고와 별도 capacity_candidates를 IMO 원본 키로 연결한다. 지원 선종은 Bulk carrier/Container ship/Oil tanker의 DWT 기준 참고 산술로 제한한다. GT 선종이나 애매한 분류는 계산하지 않는다.
+- 참고값 = 보고 CO₂(t) × 1,000,000 / (후보 DWT(t) × distance_nm_estimate(nm)). 원본 CO₂는 연료로 재계산하지 않는다. 거리와 CO₂의 범위 일치도 보장하지 않으므로 결과는 검토용 수치이며 공식 CII가 아니다.
+- 기본 응답은 `status=estimated|blocked`, `reference_only=true`, `requires_review=true`, `reference_dwt_intensity`, `blockers`, `warnings`, 단위·산식·반올림·요청/원본/참조 스냅샷이다. 공식 CII와 등급은 항상 null, compliance=not_assessed다.
+- 참조 부재·출처 간 DWT 5% 초과 충돌·원본 DWT와 후보의 5% 초과 충돌·결측/비양수·지원 밖 선종·복수 승인 보고는 blocked다. 날짜/연도 일치·실제 자료·승인 상태를 확인하며 Partial을 합산하거나 임의 선택하지 않는다.
+- 계산 성공에도 MRV 범위와 DCS 범위 차이, 역산 거리·범위 미검증, 후보 DWT·시점 미검증, 보정/법정 검증 미적용을 표시한다. 출처별 숫자·URL·파일 SHA256·논리 행 번호를 보존한다.
+- 조회는 한 READ ONLY/REPEATABLE READ 트랜잭션, SQL당 5초 제한을 사용한다. 참조 테이블을 읽는 DB 오류/미적용 스키마는 503, 입력 오류는 422, 인증은 기존 401/403이다. 참조 테이블은 존재하나 해당 후보가 없으면 200 blocked다.
+- 기존 query/calculate/ask 응답, 원본·vessels·앱 선박·운항·공식 CII 판정은 변경하지 않는다. 화면·LLM·영구 감사 어댑터는 후속 범위다.
 
 ## 수용 기준
 

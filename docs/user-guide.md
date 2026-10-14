@@ -251,6 +251,22 @@ GISIS 정규화는 `uv run --locked --project backend --group data python -m scr
 
 공식 CII 산정에 필요한 동일 선박·동일 연도의 검증된 연료별 사용량, 항해거리, 적용 선종·용량 및 보정 조건은 아직 충분히 확보되지 않았습니다. 공개 집계와 제원 후보를 공식 입력으로 자동 승격하지 않습니다.
 
+### DWT 후보를 참고 지표에 연결하기 (선택)
+
+기존 MRV 적재 후 추가 제원 migration을 적용하고 확보한 후보 CSV를 별도로 적재한다. 원본 파일은 저장소에 포함하지 않는다. 다음 명령은 저장소 루트에서 실행한다.
+
+```powershell
+# 먼저 기존 안내에 따라 호스트 DATABASE_URL과 migration을 준비한다.
+npx --yes dbmate@2.36.0 -d migrations --no-dump-schema up
+uv run --locked --project backend python -m scripts.load_capacity_candidates --csv D:/Data/vessel_capacity_candidates.csv
+# 미리보기 행 수·DWT 보유·충돌·해시 확인 후 적용
+uv run --locked --project backend python -m scripts.load_capacity_candidates --csv D:/Data/vessel_capacity_candidates.csv --apply
+```
+
+서버 Bearer 인증으로 `POST /api/maritime-data/reference-intensity`에 `{"scope":{"dataset":"real_annual","vessel_id":"REAL:IMO:9074729","year":2023},"accept_reference_limitations":true}`를 보낸다. 예시 ID·연도의 실제 레코드/후보가 없으면 blocked다. 성공은 `estimated`이며 `reference_dwt_intensity`와 CO₂·추정 거리·DWT·출처 스냅샷·한계 경고를 함께 확인한다. 공식 CII나 등급이 아니다. 기존 `/calculate`의 실제 MRV blocked 정책은 유지되며 화면 자동 연결은 포함하지 않는다.
+
+후보 DWT가 있어도 선종·양수 CO₂/거리·출처 일치·단일 승인 보고 조건을 만족해야 한다. 거리·DCS 범위·시점별 제원은 여전히 미검증이다. 참고값을 공식 등급으로 표시하거나 추정거리를 검증거리로 바꾸지 않는다. 참조 테이블이 비어 있지 않으면 적재를 거절한다. 앱 JSON 백업에는 참조 테이블이 없으므로 PostgreSQL/CSV를 따로 백업한다.
+
 #### 기존 데이터 버전
 
 2026-09-30 로컬 적재 기록: MRV 80,552행 중 조회 대상 79,032행, Partial 1,520행은 보존하되 기본 조회에서 제외. 합성 Noon 4,380행·238항차이며 거리 0인 기록 557행은 연료량을 보존합니다. 이 수치는 저장소에 데이터가 포함되거나 이번 작업에서 DB를 재검증했다는 의미가 아닙니다. 다른 데이터 버전에서는 `scripts/verify_load.sql`의 기대값을 검토하세요.

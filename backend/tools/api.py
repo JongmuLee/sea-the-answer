@@ -15,6 +15,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import create_engine
 
 from . import query as maritime_data, agent as maritime_data_agent, calculations as maritime_data_calculations
+from .reference_intensity import ReferenceIntensityRequest, calculate_reference
 
 logger = logging.getLogger('maritime_data.audit')
 bearer = HTTPBearer(auto_error=False)
@@ -61,6 +62,12 @@ def create_router(engine, token):
     @router.post('/api/maritime-data/ask', dependencies=[Depends(authorize)])
     def ask(body: maritime_data_agent.Ask):
         return maritime_data_agent.run(engine, DisabledGateway(), body)
+
+    @router.post('/api/maritime-data/reference-intensity', dependencies=[Depends(authorize)])
+    def reference_intensity(body: ReferenceIntensityRequest):
+        result = calculate_reference(engine, body)
+        logger.info('maritime_data.reference_intensity status=%s', result['status'])
+        return result
 
     return router
 
