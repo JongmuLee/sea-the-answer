@@ -176,7 +176,7 @@ LLM_RESPONSE_FORMAT=text
 
 25초를 넘는 추론은 실패 전환되므로 로컬 모델을 미리 적재해 확인하세요. 기본 호환 요청은 공급자별 선택 필드를 생략하여 기존 2,200 출력 토큰 한도도 보내지 않습니다. 생성 한도는 모델 서버 설정에 따르며 앱은 최대 5개 답변 문장과 인용을 검증합니다. 상세 형식·제약은 [공급자 계약](docs/specs/llm-provider.md)에 있습니다.
 
-CI 워크플로는 기능 변경과 별도 PR로 관리합니다. 수행한 검증과 미검증 범위는 [변경 이력](docs/changelog.md)에 기록합니다.
+CI 워크플로는 [별도 PR #14](https://github.com/dudco/sea-the-answer/pull/14)로 분리했습니다. 수행한 검증과 미검증 범위는 [변경 이력](docs/changelog.md)에 기록합니다.
 
 ## API
 

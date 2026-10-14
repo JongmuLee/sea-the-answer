@@ -1,7 +1,7 @@
 # OpenAI 호환 Chat Completions 전환
 
 - 상태: 진행 중
-- 구현·제출: PR #11 초안 제출 후 2026-10-14 검토 의견 반영 중. 실제 동국 AI Chat·Ollama 연결 확인은 정보·환경 확보 후 후속 검증으로 남음.
+- 구현·제출: 2026-10-14 검토 의견을 반영한 기능 PR #13과 별도 CI PR #14 제출 완료. 실제 동국 AI Chat·Ollama 연결 확인은 정보·환경 확보 후 후속 검증으로 남음.
 - 작성: 정호영 · Codex 지원 · 2026-10-13
 - 담당: 정호영
 - 목표 일자: 2026-10-14 (팀장 지시의 “내일까지”, 2026-10-13 기준)
@@ -43,10 +43,10 @@
 - [x] 팀장 검토 의견과 최신 `main`의 RAG 전처리 변경을 확인하고 기존 기능을 보존하는 범위를 정함.
 - [x] LLM 공급자 명세에 공통 설정 이름과 URL 호스트별 키 선택 계약을 확정하고 ADR 0013을 작성.
 - [x] `config.py`·`.env.example`·Compose·테스트의 설정 이름 및 공급자별 키를 함께 갱신.
-- [ ] CI 워크플로를 기능 변경에서 제거하고 별도 CI PR로 분리. 기능 문서의 현재 CI 연결 안내도 제거.
+- [x] CI 워크플로를 기능 변경에서 제거하고 별도 CI PR #14로 분리. 기능 문서의 현재 CI 연결 안내도 제거.
 - [x] README·구조·사용 안내·색인과 기존 ADR 상태를 새 계약에 맞춰 갱신.
-- [x] 변경 코드의 모의 HTTP·API 94개, 전체 백엔드 189개 통과·60개 건너뜀 확인. Docker 실행 파일이 없어 Compose e2e는 미수행이며 #11의 과거 검증과 구분.
-- [ ] 후속 기능 PR과 별도 CI PR을 제출하고 실제 PR 번호·검증 한계를 기록.
+- [x] 모의 HTTP·API 94개, 로컬 전체 백엔드 189개 통과·60개 건너뜀 확인. 별도 원격 검증에서 PostgreSQL 포함 245개 통과·4개 건너뜀, 프런트 빌드·Compose·Docker e2e와 정리 성공. #11의 과거 검증과 구분.
+- [x] [후속 기능 PR #13](https://github.com/dudco/sea-the-answer/pull/13)과 [별도 CI PR #14](https://github.com/dudco/sea-the-answer/pull/14)를 제출하고 실제 PR 번호·검증 한계를 기록.
 - 완료 조건: OpenAI·동국 키가 서로 다른 호스트에 전송되지 않고 로컬 Ollama·기타 호환 서버에는 두 키 모두 전송하지 않으며, 기능 PR의 diff에 CI 워크플로가 없다.
 
 ### 1단계 — 사전 조사와 구현 명세 준비
@@ -165,7 +165,7 @@ docker compose -p haedap-llm-check --profile e2e down
 
 - 동국 AI Chat의 웹 링크는 확보했다. 공식 API 안내, API 기본 주소(웹 채팅 화면 주소와 구분), 정확한 모델 ID, Bearer 인증 여부, JSON 출력 옵션 지원 여부는 추가 확인이 필요하다.
 - 사용할 Ollama 모델과 다운로드·기동 상태, 직접 실행인지 Docker→호스트인지, 실제 하드웨어에서 응답 시간.
-- 로컬 Docker가 없어 현재 변경의 Compose·e2e는 Docker 환경에서 후속 검증이 필요하다. uv·Python·Node는 프로젝트 검증 폴더에 준비 완료. CI 워크플로는 기능 변경과 별도 PR로 제출한다.
+- 로컬 Docker는 없지만 현재 변경의 Compose·e2e는 별도 fork 검증 브랜치에서 통과했다. 실제 동국·Ollama 연결은 여전히 후속 검증이 필요하다. CI 워크플로는 기능 변경과 별도 PR #14로 제출했다.
 
 ## 7. 진행 기록
 
@@ -176,3 +176,5 @@ docker compose -p haedap-llm-check --profile e2e down
 - 2026-10-13: fork 브랜치를 푸시하고 PR #11 초안 생성. 원본 PR에서 Actions 실행이 관찰되지 않아 push 트리거도 추가해 본인 fork에서 동일 CI 검증 진행.
 - 2026-10-13: [Linux CI](https://github.com/cxo-ca/sea-the-answer/actions/runs/38408707402) 성공: 백엔드 201 통과·실 데이터셋 4 건너뜀, 프런트 테스트·빌드, Compose 구성 3종, Docker e2e 14단계 흐름 1개 테스트·정리 통과. PR #11은 충돌 없이 병합 가능. 실제 공급자 호출 성공은 주장하지 않음.
 - 2026-10-14: 팀장 검토 의견에 따라 CI를 분리하고 공통 URL·출력 설정을 `LLM_*`로 변경, URL 호스트별 OpenAI·동국 키 선택과 로컬 무인증을 구현. 최신 `main`의 RAG 전처리와 문서 충돌을 양쪽 내용 보존으로 해결. 모의 HTTP·API 94개·전체 backend 189개 통과(60개 건너뜀). Docker와 실제 동국·Ollama 호출은 미검증.
+- 2026-10-14: 최신 main `76620c7`에 기능 변경만 한 커밋으로 정리한 PR #13과 CI 전용 PR #14 제출. 기능과 워크플로를 결합한 별도 검증 브랜치에서 PostgreSQL·Docker e2e 확인을 시작했다. 원본 PR과 DB·개인 `.env`는 보존했다.
+- 2026-10-14: [기능 검증](https://github.com/cxo-ca/sea-the-answer/actions/runs/38518450553)에서 백엔드 245개 통과·4개 건너뜀, 프런트 4개·빌드, Compose 3종, Docker e2e 1개·정리 성공. [CI 전용 검증](https://github.com/cxo-ca/sea-the-answer/actions/runs/38518455486)도 성공. 실제 외부 모델 검증은 포함하지 않는다.

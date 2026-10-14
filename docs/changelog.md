@@ -43,9 +43,15 @@
 |---|---|
 | 모델 전용 모의 HTTP·API pytest | 94 통과. 두 공급자 키가 함께 있을 때 대상별 Bearer 헤더, Ollama 무인증, 키 누락·유사 도메인·URL 경로의 키 격리, 새 설정 이름·health·발췌 전환 검증 |
 | `backend/`에서 `uv run --locked --offline pytest -q --basetemp ../.verification/pytest-llm-review-20261014` | 189 통과, 실 PostgreSQL·데이터셋이 필요한 60 건너뜀. 기존 Starlette TestClient/httpx 사용 중단 경고 1건. 최초 실행의 Windows 임시 폴더 권한 오류는 전용 검증 폴더 재실행으로 해소 |
-| 문서·기능 변경 범위 | 로컬 링크 170개·JSON 예제 2개와 `git diff --check` 통과. 최신 main 대비 CI 워크플로·frontend·e2e·migrations·의존성 변경 없음 |
+| 문서·기능 변경 범위 | 최종 로컬 링크 171개·JSON 예제 2개와 `git diff --check` 통과. 최신 main 대비 CI 워크플로·frontend·e2e·migrations·의존성 변경 없음 |
 | 로컬 Compose e2e·정리 명령 | `docker compose --profile e2e up --build --force-recreate --exit-code-from e2e e2e` 및 `down`을 시도했으나 Docker 실행 파일이 없어 실행 불가 |
 | 실제 OpenAI·동국 AI Chat·Ollama 호출 | 수행하지 않음. 공급자 공식 접속 정보·실행 모델 환경에 대한 검증은 후속 항목 |
+
+제출: 검토 반영 기능은 [PR #13](https://github.com/dudco/sea-the-answer/pull/13), CI 워크플로는 [PR #14](https://github.com/dudco/sea-the-answer/pull/14)로 분리했다. PR #13은 최신 main 기준으로 CI 파일을 포함하지 않는다.
+
+같은 날 [기능 검증 Actions](https://github.com/cxo-ca/sea-the-answer/actions/runs/38518450553)가 성공했다. 검증 커밋 `2eeaffc`는 기능 커밋 `e72f1ce`에 별도 CI 워크플로만 추가한 것으로, 모델 코드·Compose·설정 예제는 동일하다. Linux / Python 3.13.16 / PostgreSQL 18에서 백엔드 **245 통과·실 데이터셋 4 건너뜀**, 프런트 **4개 통과·Next.js 16.3.8 빌드 성공**, 운영·개발·e2e Compose 검사 3종과 Docker Chromium e2e **1개 통과**를 확인했다. e2e 종료 코드 0, 테스트 컨테이너·네트워크 제거도 확인했다. 기존 Starlette/httpx 경고 1건이 있으며 실제 외부 모델 호출은 검증하지 않았다. 이후 제출 링크·결과 기록 변경은 문서에만 해당한다.
+
+별도 [CI 전용 Actions](https://github.com/cxo-ca/sea-the-answer/actions/runs/38518455486)도 커밋 `8112816`에서 성공했다. LLM 변경을 포함하지 않은 최신 main에 CI만 추가해 백엔드 **151 통과·실 데이터셋 4 건너뜀**, 프런트 테스트·빌드, Compose 3종, Docker e2e와 정리를 확인했다.
 
 ### 2026-10-13 — 최초 PR #11의 Chat Completions 구현 (Windows)
 
