@@ -53,7 +53,7 @@
 
 ### adr — 설계 결정
 
-- [0014 업무 스킬과 선택 LLM](adr/0015-optional-model-workflow-skills.md): 고정 실행기와 런타임 지침.
+- [0015 업무 스킬과 선택 LLM](adr/0015-optional-model-workflow-skills.md): 고정 실행기와 런타임 지침.
 
 추가 제안: [0013 - 제원 후보 별도 보존·MRV 참고 집약도 API](adr/0013-mrv-reference-intensity.md). 팀 PR #11에서 사용하는 0012와 번호를 구분합니다.
 

@@ -15,7 +15,8 @@
 - 보고서는 payload만 생성하고 별도 저장 버튼에서 새 draft로 저장한다. 평가는 본인 저장 응답에 한하며 인용·범위·계산 일관성을 검사하고 의미적 정답성은 사람 검토로 남긴다. migration·원본·기존 Tool API 계약은 변경하지 않았다.
 - 검증: 스킬 형식 6개, backend 253 passed / 68 skipped, 실 PostgreSQL 임시 스키마의 관련 회귀 35 passed, frontend 4 passed·production build, 격리 Docker e2e 19단계 통과. 앞선 실패는 새 선택란 접근성 라벨을 보완하고 테스트 스택을 비운 뒤 해결했다. 별도 Docker 체험 DB에서 여섯 스킬 HTTP와 실제 MRV/DWT 표본 8.013878 화면 표시·모바일 폭·브라우저 오류 없음을 확인했다.
 - 실제 Qwen 2.5 3B 요청은 성공하고 검증된 JSON·근거 부족 응답을 반환했다. 표현 품질·전체 정답률을 통과한 것으로 해석하지 않는다. 모델 없이 여섯 기능을 사용할 수 있다. 자연어 자동 라우팅·지속 대화 기억·공식 CII·점검 승인 기능은 포함하지 않았다.
-- 작업은 main 0f5ee3bf7599 기반 `codex/qwen-workflow-skills`의 로컬 변경이다. 원격 푸시·PR은 하지 않았다. 체험용 DB는 기존 개인 role4 DB와 분리했다.
+- 팀 최신 main 통합 후 검증: backend **272 passed / 68 skipped**, 실 PostgreSQL 관련 **35 passed**, frontend **4 passed**, production build와 Docker 전체 **19단계 통과**. 팀의 기본 문서·게이트웨이·선택 입력 수정도 보존했다.
+- 최초 구현 후 팀 main 024f3b376713의 게이트웨이·기본 문서·입력 보존 수정을 유지해 다시 통합했다. 작업은 해당 main 기반 `codex/qwen-workflow-skills`의 로컬 변경이다. 원격 푸시·PR은 하지 않았다. 체험용 DB는 기존 개인 role4 DB와 분리했다.
 
 - **PR #11 검토 반영 / 2026-10-14** (1.4.0 유지, [ADR 0013](adr/0013-provider-credential-isolation.md)): URL·출력 형식 설정을 `LLM_API_BASE_URL`·`LLM_RESPONSE_FORMAT`으로 변경. `OPENAI_MODEL`·`OPENAI_API_KEY`는 유지하고 `DONGUK_AI_CHAT_API_KEY`를 분리했다. URL 호스트에 맞는 공급자 키만 선택하며 로컬 Ollama·기타 호환 서버에는 두 키가 있어도 인증 헤더를 보내지 않는다. CI 워크플로는 기능 변경에서 제거해 별도 PR로 분리한다. 최신 `main`의 RAG 전처리·문서 변경을 함께 보존했다. 기존 `.env`는 재시작 전 이름 변경이 필요하며 자동 수정하지 않는다. 실제 동국·Ollama 접속은 미검증.
 
