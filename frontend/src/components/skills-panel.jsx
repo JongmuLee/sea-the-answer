@@ -32,7 +32,7 @@ export default function SkillsPanel({group='documents',documentId='',targetAnswe
   const seedFrom=seedShip?state.from:'';
   const seedTo=seedShip?state.to:'';
   useEffect(()=>{
-    const sequence=++generation.current;
+    ++generation.current;
     setAnswer(null);setError('');setBusy(false);setDocuments([]);setSavedId('');setSaving(false);setAnswerId('');
     setSkill(config.skills[0]);setDocuments(documentId?[documentId]:[]);
     setShip(seedShip);setFrom(seedFrom);setTo(seedTo);setYear('');
@@ -53,7 +53,7 @@ export default function SkillsPanel({group='documents',documentId='',targetAnswe
   const needsShip=['mrv-analysis','operation-summary','report-draft'].includes(skill);
   async function execute(e){
     e.preventDefault();e.stopPropagation();
-    if(busy)return;
+    if(busy || saving)return;
     const sequence=++generation.current;
     setBusy(true);setError('');setAnswer(null);setSavedId('');
     try {
@@ -85,6 +85,7 @@ export default function SkillsPanel({group='documents',documentId='',targetAnswe
     <p className="small muted">필요한 자료를 선택해 실행하세요. 기본 조회·계산에는 AI 연결이 필요하지 않습니다.</p>
     <form className="card pad skill-form" onSubmit={execute}
       onInput={e=>e.stopPropagation()} onChange={e=>e.stopPropagation()}>
+      <fieldset className="skill-inputs" disabled={busy || saving}>
       {config.skills.length>1 && <label>실행할 기능<select aria-label="실행할 기능" value={skill} onChange={e=>changeSkill(e.target.value)} disabled={!catalog.length}>
         {catalog.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
       </select></label>}
@@ -115,13 +116,14 @@ export default function SkillsPanel({group='documents',documentId='',targetAnswe
       {skill==='qa-evaluation' && <p className="small">현재 표시된 본인 응답의 출처·범위·계산을 점검합니다.</p>}
       {selected?.optional_model && <label className="inline"><input type="checkbox" checked={useModel} onChange={e=>setUseModel(e.target.checked)} /> 선택 문서의 설명을 AI로 정리{!state.health?.llmConfigured?' (AI 미설정 시 원문 발췌)':''}</label>}
       <button type="submit" className="btn primary" disabled={busy || !state.ready || !catalog.length}>{busy?'실행 중…':group==='evaluation'?'응답 점검 실행':'실행'}</button>
+      </fieldset>
     </form>
     {error && <p role="alert" className="notice warning">{error}</p>}
     {answer && <article className="card pad mt" aria-live="polite">
       <h2>{answer.skill.name}</h2><p>{answer.notice}</p>
       {answer.statements.map((s,i)=>{const e=answer.evidence.find(v=>v.id===s.chunkId);return <div key={`${s.chunkId}-${i}`} className="skill-evidence"><p>{s.text}</p><small>{e?.title} · {e?.version} · {e?.page?`p. ${e.page}`:'페이지 미제공'}</small><details><summary>인용 원문</summary><blockquote>{s.quote}</blockquote></details></div>;})}
       {!answer.statements.length && answer.evidence.length > 0 && <details><summary>검색된 원문 근거 확인</summary>{answer.evidence.map(e=><div key={e.id} className="skill-evidence"><p>{e.text}</p><small>{e.title} · {e.version} · {e.page?`p. ${e.page}`:'페이지 미제공'}</small></div>)}</details>}
-      <SkillResult key={answer.id} answer={answer} />
+      <SkillResult key={answer.id} answer={answer} draftSaved={Boolean(savedId)} />
       {answer.result?.draft && <div className="actions mt">
         <button type="button" className="btn primary" onClick={saveDraft} disabled={saving || Boolean(savedId)}>{savedId?'초안 저장됨':saving?'저장 중…':'새 보고서 초안으로 저장'}</button>
         {savedId && <button type="button" className="btn" onClick={()=>router.push('/reports/'+encodeURIComponent(savedId))}>저장한 초안 열기</button>}

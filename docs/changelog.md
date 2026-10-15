@@ -10,6 +10,8 @@
 - **동국 AI Chat 게이트웨이 호스트 / 2026-10-14** (버전 유지, [ADR 0014 제안](adr/0014-mindlogic-gateway-host.md)): 확인된 API 기본 주소 `https://factchat-cloud.mindlogic.ai/v1/gateway`의 정확한 호스트에 `DONGUK_AI_CHAT_API_KEY`를 보내고, 이 호스트에서는 문서 표기대로 `/chat/completions/`로 호출한다. 다른 `*.mindlogic.ai`·유사 도메인에는 키를 보내지 않는다. 검증: 2026-10-14 로컬 작업 폴더의 `backend/`에서 (Linux, Python 3.13) `uv run pytest` 233 통과·65 건너뜀(PostgreSQL 필요 테스트). 실제 게이트웨이 호출·e2e는 미수행.
 ### 2026-10-15 - 선택적 LLM을 사용하는 앱 업무 스킬
 
+- 실행·저장 상태 보완: 처리 중 양식을 잠그고 저장 중 새 실행을 차단한다. 보고서 저장 성공 문구와 과거 이력 미리보기의 상태 안내를 구분했다. 지연 요청을 포함한 Docker 전체 19단계 통과(49.3초), frontend 4 passed·production build 성공.
+
 - 문서 선택 오류: 스킬 양식의 input/change가 공통 화면 처리기에 전파되지 않도록 분리하고, 문서 선택을 체크박스·선택 개수 표시로 변경했다. 실제 인앱 브라우저 클릭·입력 후 선택 유지·선택 문서 조회 확인. frontend 4 passed, production build, Docker 전체 19단계 재검증 통과(36.7초).
 
 - 화면 배치 변경: 독립 스킬 메뉴를 제거하고 통합 질문·문서 상세·운항 정보·보고서 목록·답변 아래에 각각 연결했다. /skills는 /chat으로 이동한다. 화면별 재사용 실행 패널이 현재 자료를 초기 선택하고 펼칠 때만 카탈로그를 요청한다. frontend 4 passed·production build·기존 화면 기반 Docker 전체 19단계 통과(35.5초).

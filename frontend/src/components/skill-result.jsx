@@ -13,7 +13,7 @@ const labels = {
   SYNTHETIC_OR_SAMPLE_OPERATIONS: '가상 예시 운항자료가 포함되어 있습니다.',
   PERIOD_HAS_UNREPORTED_DAYS: '선택 기간에 기록이 없는 날짜가 있습니다.',
 };
-export function SkillResult({ answer }) {
+export function SkillResult({ answer, draftSaved }) {
   const r = answer?.result || {};
   if (!Object.keys(r).length && !answer?.warnings?.length) return null;
   return <section className="skill-result" aria-label="업무 결과">
@@ -46,7 +46,7 @@ export function SkillResult({ answer }) {
         {r.checks.map(v=><tr key={v.check}><td>{v.check}</td><td>{{pass:'통과',fail:'실패',not_applicable:'해당 없음',manual_review_required:'사람 검토 필요'}[v.status] || v.status}</td><td>{v.detail}</td></tr>)}
       </tbody></table></div>
     </>}
-    {r.draft && <><h3>검토용 보고서 초안</h3><textarea aria-label="보고서 초안 내용" readOnly rows={14} value={r.draft.text} /><p>아직 저장·제출되지 않았습니다.</p></>}
+    {r.draft && <><h3>검토용 보고서 초안</h3><textarea aria-label="보고서 초안 내용" readOnly rows={14} value={r.draft.text} /><p>{draftSaved === true ? '새 보고서 초안으로 저장했습니다. 제출되지 않았습니다.' : draftSaved === false ? '아직 저장·제출되지 않았습니다.' : '생성 당시의 미리보기입니다. 현재 저장·제출 상태는 보고서에서 확인하세요.'}</p></>}
     {answer.warnings?.filter(v=>labels[v]).map(v=><p key={v} className="small">{labels[v]}</p>)}
     {Object.keys(r).length > 0 && <details><summary>조회·계산 근거 상세</summary><pre className="skill-json">{JSON.stringify(r,null,2)}</pre></details>}
   </section>;

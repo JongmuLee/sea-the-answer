@@ -13,8 +13,8 @@
 .workflow-panel > summary { cursor: pointer; font-weight: 600; color: var(--teal); }
 .workflow-panel[open] > summary { margin-bottom: 16px; }
 .workflow-panel > .skill-form { margin-top: 12px; }
-.skill-form { display: grid; gap: 16px; }
-.skill-form > label { display: grid; gap: 7px; }
+.skill-inputs { display: grid; gap: 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.skill-inputs > label { display: grid; gap: 7px; }
 .skill-form select, .skill-form textarea, .skill-form input:not([type=checkbox]) { width: 100%; }
 .skill-form select, .skill-form textarea, .skill-form input:not([type=checkbox]), .skill-result textarea {
   font: inherit; line-height: 1.5; border: 1px solid #cbd9e2; border-radius: 8px;

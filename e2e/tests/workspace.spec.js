@@ -316,9 +316,18 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
       await secondDocument.uncheck();
     }
     await panel.getByLabel('질문 또는 작업 목적').fill(question);
+    let releaseExecution;
+    const executionGate = new Promise(resolve=>{releaseExecution=resolve;});
+    const holdExecution = async route=>{await executionGate; await route.continue();};
+    await page.route('**/api/skills/run',holdExecution);
     const response = page.waitForResponse(r => r.url().endsWith('/api/skills/run') && r.request().method() === 'POST');
     await panel.getByRole('button', { name: '실행', exact: true }).click();
+    try {
+      await expect(selectedDocument).toBeDisabled();
+      await expect(panel.getByLabel('질문 또는 작업 목적')).toBeDisabled();
+    } finally { releaseExecution(); }
     const value = await (await response).json();
+    await page.unroute('**/api/skills/run',holdExecution);
     expect(value.evidence.length).toBeGreaterThan(0);
     expect(value.evidence.every(e => e.document_id === source.id)).toBe(true);
     expect(value.generation).toBe('extractive');
@@ -361,8 +370,18 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     const value = await (await response).json();
     await expect(page.getByLabel('보고서 초안 내용')).toContainText('검토용');
     expect((await api('/api/reports')).data.reports).toHaveLength(before);
+    let releaseSave;
+    const saveGate = new Promise(resolve=>{releaseSave=resolve;});
+    const holdSave = async route=>{if(route.request().method()==='POST')await saveGate; await route.continue();};
+    await page.route('**/api/reports',holdSave);
     await page.getByRole('button', { name: '새 보고서 초안으로 저장', exact: true }).click();
+    try {
+      await expect(reportPanel.getByRole('button',{name:'실행',exact:true})).toBeDisabled();
+      await expect(reportPanel.getByLabel('선박',{exact:true})).toBeDisabled();
+    } finally { releaseSave(); }
     await expect(page.getByRole('button', { name: '초안 저장됨', exact: true })).toBeDisabled();
+    await page.unroute('**/api/reports',holdSave);
+    await expect(reportPanel).toContainText('새 보고서 초안으로 저장했습니다. 제출되지 않았습니다.');
     expect((await api('/api/reports')).data.reports).toHaveLength(before + 1);
     await page.getByRole('button', { name: '저장한 초안 열기', exact: true }).click();
     await expect(page).toHaveURL(/\/reports\//);
