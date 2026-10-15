@@ -83,17 +83,26 @@ export default function SkillsPanel({group='documents',documentId='',targetAnswe
   return <details className="skills-page workflow-panel mt" data-workflow={group} onToggle={e=>setExpanded(e.currentTarget.open)}>
     <summary>{config.title}</summary>
     <p className="small muted">필요한 자료를 선택해 실행하세요. 기본 조회·계산에는 AI 연결이 필요하지 않습니다.</p>
-    <form className="card pad skill-form" onSubmit={execute}>
+    <form className="card pad skill-form" onSubmit={execute}
+      onInput={e=>e.stopPropagation()} onChange={e=>e.stopPropagation()}>
       {config.skills.length>1 && <label>실행할 기능<select aria-label="실행할 기능" value={skill} onChange={e=>changeSkill(e.target.value)} disabled={!catalog.length}>
         {catalog.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
       </select></label>}
       <p className="small muted">{selected?.description}</p>
       <label>질문 또는 작업 목적<textarea value={question} onChange={e=>setQuestion(e.target.value)} maxLength={2000} required rows={3} placeholder="예: 연료 전환 전에 확인할 내용을 정리해줘" /></label>
-      {needsDocs && <label>사용할 문서 {skill==='report-draft'?'(선택 사항)':'(필수)'}
-        <select multiple size={Math.min(6,Math.max(2,state.docs.filter(d=>d.active).length))} aria-label="사용할 문서" value={documents} onChange={e=>setDocuments([...e.target.selectedOptions].map(o=>o.value))}>
-          {state.docs.filter(d=>d.active).map(d=><option key={d.id} value={d.id}>{d.title} · {d.version}</option>)}
-        </select><small>Ctrl 또는 Shift로 여러 문서를 선택할 수 있습니다. 최대 20개.</small>
-      </label>}
+      {needsDocs && <fieldset className="skill-documents" aria-label="사용할 문서">
+        <legend>사용할 문서 {skill==='report-draft'?'(선택 사항)':'(필수)'}</legend>
+        <div className="skill-document-list">
+          {state.docs.filter(d=>d.active).map(d=><label key={d.id} className="skill-document-option">
+            <input type="checkbox" data-document-id={d.id} checked={documents.includes(d.id)}
+              disabled={!documents.includes(d.id) && documents.length>=20}
+              onChange={e=>setDocuments(old=>e.target.checked?[...new Set([...old,d.id])]:old.filter(id=>id!==d.id))} />
+            <span>{d.title} · {d.version}</span>
+          </label>)}
+        </div>
+        {!state.docs.some(d=>d.active) && <p>선택할 수 있는 활성 문서가 없습니다.</p>}
+        <small>선택 {documents.length}개 / 최대 20개. 다시 누르면 선택이 해제됩니다.</small>
+      </fieldset>}
       {needsShip && <label>선박<select aria-label="선박" value={ship} onChange={e=>setShip(e.target.value)}><option value="">선박 선택</option>
         {state.ships.map(s=><option key={s.id} value={s.id}>{s.name}{s.sample?' (가상 예시)':''}</option>)}
       </select></label>}

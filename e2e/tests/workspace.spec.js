@@ -300,7 +300,21 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     const docs = (await api('/api/documents')).data.documents.filter(d => d.active);
     const source = docs.find(d => d.sections.some(s => s.text.includes('연료'))) || docs[0];
     const question = source.sections[0].text.slice(0, 80);
-    await panel.getByLabel('사용할 문서', { exact: true }).selectOption(source.id);
+    const selectedDocument = panel.locator(`[data-document-id="${source.id}"]`);
+    await selectedDocument.check();
+    await panel.getByLabel('질문 또는 작업 목적').fill('선택 상태 유지 확인');
+    await expect(selectedDocument).toBeChecked();
+    await selectedDocument.uncheck();
+    await expect(selectedDocument).not.toBeChecked();
+    await selectedDocument.check();
+    const secondSource = docs.find(d=>d.id!==source.id);
+    if(secondSource){
+      const secondDocument=panel.locator(`[data-document-id="${secondSource.id}"]`);
+      await secondDocument.check();
+      await expect(selectedDocument).toBeChecked();
+      await expect(secondDocument).toBeChecked();
+      await secondDocument.uncheck();
+    }
     await panel.getByLabel('질문 또는 작업 목적').fill(question);
     const response = page.waitForResponse(r => r.url().endsWith('/api/skills/run') && r.request().method() === 'POST');
     await panel.getByRole('button', { name: '실행', exact: true }).click();
@@ -312,7 +326,7 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     await page.goto('/documents/' + encodeURIComponent(source.id));
     const documentPanel = page.locator('[data-workflow=document]');
     await documentPanel.locator('summary').first().click();
-    await expect(documentPanel.getByLabel('사용할 문서', {exact:true})).toHaveValues([source.id]);
+    await expect(documentPanel.locator(`[data-document-id="${source.id}"]`)).toBeChecked();
     await documentPanel.getByLabel('실행할 기능').selectOption('checklist');
     await documentPanel.getByLabel('질문 또는 작업 목적').fill(question);
     await documentPanel.getByRole('button', { name: '실행', exact: true }).click();

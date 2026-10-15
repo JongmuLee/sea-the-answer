@@ -24,6 +24,13 @@
   outline: 2px solid #167d83; outline-offset: 2px;
 }
 .skill-form label.inline { display: flex; align-items: center; }
+.skill-documents { min-width: 0; border: 0; padding: 0; }
+.skill-documents legend { margin-bottom: 8px; }
+.skill-document-list { max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.skill-document-option { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; cursor: pointer; }
+.skill-document-option:has(input:checked) { background: var(--mint); }
+.skill-document-option input { margin-top: 4px; flex-shrink: 0; accent-color: var(--teal); }
+.skill-document-option span { overflow-wrap: anywhere; }
 .skill-dates { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
 .skill-dates label { display: grid; gap: 7px; }
 .skill-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 16px; margin: 20px 0; }
