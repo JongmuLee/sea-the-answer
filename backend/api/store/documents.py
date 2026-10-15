@@ -136,6 +136,14 @@ class DocumentStore:
 
     def search(self, user: dict, question: str, kind: str = "all") -> list[dict]:
         text(question, "질문", 2000)
+        candidates = self.search_candidates(user, kind)
+        # Filter before BM25 so inaccessible chunks cannot affect IDF/ranking.
+        # Keep scores internal; /search and /ask retain their evidence contract.
+        return [{key: value for key, value in row.items() if key != "score"}
+                for row in retrieve(question, candidates, top_k=5)]
+
+    def search_candidates(self, user: dict, kind: str = "all") -> list[dict]:
+        """Shared read-only candidate selection for API search and diagnostics."""
         require(kind in ("all", "imo", "manual"), "문서 필터가 올바르지 않습니다.")
         rows = self.all("""SELECT c.id,c.document_id,c.heading,c.text,p.page,d.title,d.kind,d.url,
             d.reference,d.version,d.reviewed_at,d.hash,m.body AS meta
@@ -153,7 +161,4 @@ class DocumentStore:
             if kind == "imo" and row["kind"] != "official-summary" or kind == "manual" and row["kind"] == "official-summary":
                 continue
             candidates.append({**row, "reviewed_at": stamp(row["reviewed_at"]), "meta": meta})
-        # Filter before BM25 so inaccessible chunks cannot affect IDF/ranking.
-        # Keep scores internal; /search and /ask retain their evidence contract.
-        return [{key: value for key, value in row.items() if key != "score"}
-                for row in retrieve(question, candidates, top_k=5)]
+        return candidates

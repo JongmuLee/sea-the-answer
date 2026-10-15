@@ -79,6 +79,16 @@
 
 ### 문서 검색 (BM25)
 
+#### 개발자 진단 CLI 계약 (2026-10-15 확정)
+
+`scripts/debug_bm25.py`는 HTTP API가 아닌 DB 접근 권한이 있는 개발자용 도구다. `query`, `--top-k`(기본 5), `--document-id`(개정 ID 완전 일치), `--document-title`(대소문자 무시 부분 일치), `--kind`(all/imo/manual), `--username`(활성 계정의 열람 범위 시뮬레이션), `--preview-chars`(기본 240, 0이면 본문 생략), `--json`을 받는다. 기본 사용자는 guest이며 문서 필터를 권한 검사 대신 사용하지 않는다. username 옵션은 웹 로그인 기능이 아니며 DB 자격 증명을 보유한 운영자만 사용한다.
+
+DB의 READ ONLY 트랜잭션에서 기존 `DocumentStore.search_candidates`를 사용한다. 추가 문서 필터는 BM25 **이전**에 AND 조건으로 적용한다. 필터 후 corpus 크기·IDF가 달라지므로 필터 없는 UI 검색과 점수가 다를 수 있다. 같은 계정·kind·corpus·top-k이면 기존 `retrieve`의 순서·점수를 유지한다. 비활성 개정·상태 및 열람 불가 청크는 통계에서도 제외된다.
+
+출력은 query 원문, 실제 확장 query_tokens, corpus_size, 역할·필터·top_k, results의 rank/chunk_id/document_id/title/page/heading/score/matched_tokens/preview다. score는 rank-bm25의 최종 합산 float이며 반올림·재계산하지 않는다. matched_tokens는 실제 질의 토큰과 **title/reference/heading/text 전체** 토큰의 교집합(질의 순서)이지 토큰별 기여도가 아니다. 작은 corpus의 0·음수 점수도 유지한다. 빈 질의/토큰/corpus/불일치는 빈 results, 잘못된 옵션·DB 오류·없는/비활성 계정은 비정상 종료한다. DB 오류의 접속 문자열·자격 증명은 출력하지 않는다. bootstrap·저장·마이그레이션·질의 이력·LLM 호출은 하지 않는다.
+
+#### 기존 API 검색 계약
+
 2026-10-14 확정: `POST /api/search`의 `{question, filter}` 및 `{evidence: [...]}`, `/api/ask`의 evidence 형식은 유지한다. 질문은 기존처럼 비어 있지 않은 최대 2,000자 문자열이며 `filter`는 `all|imo|manual`이다. `GET /api/health.retrieval`은 `bm25-ko-en`을 반환한다.
 
 - `DocumentStore.search`가 PostgreSQL에서 현재 개정(`active=true`) 청크를 읽고, 문서 상태·사용자 scope·종류 필터를 적용한 뒤에만 검색 모듈에 전달한다. 제한된 청크는 BM25 통계에도 포함하지 않는다.

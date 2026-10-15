@@ -38,7 +38,8 @@ def tokenize(value: str) -> list[str]:
     return tokens
 
 
-def _query_tokens(query: str) -> list[str]:
+def query_tokens(query: str) -> list[str]:
+    """Actual deduplicated query tokens, including the existing expansion."""
     normalized = _normalize(query)
     words = list(dict.fromkeys(_WORDS.findall(normalized)))[:30]
     for group in SEARCH_SYNONYMS:
@@ -46,6 +47,11 @@ def _query_tokens(query: str) -> list[str]:
         if any(word in normalized for word in group):
             words.extend(group)
     return list(dict.fromkeys(tokenize(" ".join(words))))
+
+
+def chunk_tokens(chunk: dict) -> list[str]:
+    """Tokenize exactly the fields used by BM25, retaining term frequencies."""
+    return tokenize(" ".join(str(chunk.get(key) or "") for key in _SEARCH_FIELDS))
 
 
 def retrieve(query: str, chunks: list[dict], top_k: int = 5) -> list[dict]:
@@ -58,11 +64,10 @@ def retrieve(query: str, chunks: list[dict], top_k: int = 5) -> list[dict]:
     """
     if type(top_k) is not int or top_k < 1:
         raise ValueError("top_k must be a positive integer")
-    terms = _query_tokens(query)
+    terms = query_tokens(query)
     if not terms or not chunks:
         return []
-    corpus = [tokenize(" ".join(str(chunk.get(key) or "") for key in _SEARCH_FIELDS))
-              for chunk in chunks]
+    corpus = [chunk_tokens(chunk) for chunk in chunks]
     # BM25Okapi divides by vocabulary size/average length: an all-empty corpus
     # must not reach its constructor. Individual empty documents are supported.
     if not any(corpus):

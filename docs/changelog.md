@@ -4,6 +4,8 @@
 
 ## 변경 이력
 
+- **BM25 개발자 진단 / 2026-10-15** (1.4.0 유지): `scripts/debug_bm25.py`에서 기존 PostgreSQL 청크를 읽어 질의 토큰·Top-K·전체 점수·일치 토큰·출처·미리보기를 출력한다. 문서 ID/제목·kind·활성 사용자 범위·JSON 옵션을 지원한다. 기존 토큰 함수와 후보 조회를 공유하고 DB는 READ ONLY로 연결한다. 랭킹·API 응답·저장·청킹·UI·스키마·의존성 변경 없음. 토큰별 기여도와 검색 품질 개선은 제외했다. [계획](plans/2026-10-15-bm25-debug.md), [실행](../README.md#bm25-개발자-디버그).
+
 - **BM25 문서 검색 / 2026-10-14** (1.4.0 유지): `api/rag_retrieval.py`에 한영 단어·한글 2글자 토큰·기존 동의어와 rank-bm25 BM25Okapi 검색을 분리했다. 저장 계층의 권한·현재 개정·문서 상태·종류 필터 이후 제목·출처·heading·본문으로 상위 5개를 선택한다. 내부 점수는 외부 evidence에 추가하지 않고 기존 응답·페이지·원문 인용을 유지한다. health의 retrieval은 `bm25-ko-en`. 사용자 추가 의존성을 사용하며 저장·개정·전처리·스키마·UI는 변경하지 않았다. 임베딩·ChromaDB·벡터·하이브리드·RRF는 범위 밖이다. [작업 계획](plans/2026-10-14-bm25-retrieval.md).
 
 - **PR #11 검토 반영 / 2026-10-14** (1.4.0 유지, [ADR 0013](adr/0013-provider-credential-isolation.md)): URL·출력 형식 설정을 `LLM_API_BASE_URL`·`LLM_RESPONSE_FORMAT`으로 변경. `OPENAI_MODEL`·`OPENAI_API_KEY`는 유지하고 `DONGUK_AI_CHAT_API_KEY`를 분리했다. URL 호스트에 맞는 공급자 키만 선택하며 로컬 Ollama·기타 호환 서버에는 두 키가 있어도 인증 헤더를 보내지 않는다. CI 워크플로는 기능 변경에서 제거해 별도 PR로 분리한다. 최신 `main`의 RAG 전처리·문서 변경을 함께 보존했다. 기존 `.env`는 재시작 전 이름 변경이 필요하며 자동 수정하지 않는다. 실제 동국·Ollama 접속은 미검증.
@@ -36,6 +38,14 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-15 — BM25 개발자 진단
+
+- Windows, Python 3.13, rank-bm25 0.2.2. 신규 진단 테스트 23개. `backend/`에서 `uv run pytest tests/test_debug_bm25.py tests/test_rag_retrieval.py -q`: **53 passed**. 루트의 `uv run --project backend pytest backend/tests/test_debug_bm25.py backend/tests/test_rag_retrieval.py -q`와 CLI `--help`도 확인했다.
+- `backend/`에서 `uv run python ../.verification/bm25-db-tests.py`로 격리된 PostgreSQL 17 클러스터를 열어 `python -m pytest -q -rs --tb=short` 수행: **338 passed / 4 skipped**, 기존 Starlette/httpx 경고 1개. 4개는 `MARITIME_DATA_TEST_DATABASE_URL`이 필요한 기존 데이터셋 테스트다. 임시 서버는 종료했다. 보조 스크립트·로그는 Git 제외이며 실제 앱 DB를 테스트용으로 사용하지 않았다.
+- `docker compose build backend` 후 README의 일회성 CLI 명령(`--top-k 3 --preview-chars 0 --json`)을 실제 등록 DB에서 실행했다. 공개 검색 후보 **5,689개 청크**를 확인했고, 세 질의(한국어 선급정지 / 영어 heavy deck cargo / 혼합 Part 5D)에 대해 진단의 순위·점수가 기존 `retrieve` 및 `DocumentStore.search` 순위와 일치했다. 문서 ID+제목 필터의 corpus 1,376개, 없는 ID의 빈 결과, 기존 활성 관리자 계정 범위도 확인했다. `SHOW transaction_read_only=on` 확인. 본문·접속 문자열·비밀값은 출력/기록하지 않았으며 실 DB에는 쓰지 않았다.
+- `docker compose -p haedap-bm25-debug-check --profile e2e up --build --force-recreate --exit-code-from e2e e2e`: **Chromium E2E 1 passed**, 종료 코드 0. backend·frontend 운영 이미지 빌드 및 기존 문서/검색/운항/보고서/관리/백업 흐름 통과. 이후 같은 프로젝트의 `docker compose ... --profile e2e down`으로 테스트 컨테이너·네트워크를 정리했다. 기존 `haedap` 웹앱은 재시작하지 않았다.
+- UI 소스를 바꾸지 않아 frontend 단위 테스트는 별도로 재실행하지 않았다. 검색 정확도 개선, 토큰별 점수 기여도, 대규모 성능, 실제 외부 LLM 호출은 검증 범위 밖이다. `git diff --check` 통과.
 
 ### 2026-10-14 — BM25 문서 검색
 

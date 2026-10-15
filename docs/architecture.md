@@ -119,6 +119,8 @@ sequenceDiagram
 
 DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유합니다. backend는 테이블이 없으면 `SCHEMA_NOT_READY`(503)를 반환합니다.
 
+개발자용 `scripts/debug_bm25.py`는 backend 기본 uv 의존성만 사용하는 읽기 전용 진단 도구다. `DocumentStore.search_candidates`의 기존 조회·권한·상태·kind 필터와 `rag_retrieval.query_tokens/chunk_tokens/retrieve`를 공유한다. API는 계속 score 없는 상위 5개를 반환하고, CLI만 점수·일치 토큰·미리보기를 출력한다. DB READ ONLY 트랜잭션에서 실행하며 초기화·저장·질문 이력·LLM 호출은 하지 않는다. 운영 이미지에는 스크립트를 포함하지 않고 실행할 때 읽기 전용 마운트한다. 기본 guest 또는 명시한 기존 활성 계정의 scope를 적용하며 DB 자격 증명을 가진 개발자 전용이다. [실행 방법](../README.md#bm25-개발자-디버그), [출력 계약](specs/api.md#개발자-진단-cli-계약-2026-10-15-확정).
+
 `frontend/tests/`는 CSV·PDF 유틸 단위 테스트(`npm test`), 최상위 `e2e/tests/`는 화면 → API → DB 전체 흐름 검증(Playwright)입니다.
 
 ## 4. 보안 경계
