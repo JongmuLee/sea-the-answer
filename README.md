@@ -36,7 +36,7 @@ sea-the-answer/
 │  ├─ pyproject.toml, uv.lock, .python-version, Dockerfile
 │  ├─ api/               FastAPI 앱 — main.py(진입점), web/(보안·동시성), routes/(도메인별 경로), store/(DB·업무 로직)
 │  ├─ tools/ (선택) 해사 데이터 조회·계산 Tool (서비스 런타임)
-│  ├─ knowledge/         seed.json(기본 문서), sample-data.json(가상 운항 예시)
+│  ├─ knowledge/         seed.json(기본 문서), documents/(기본 문서 원본 PDF), sample-data.json(가상 운항 예시)
 │  └─ tests/             pytest
 ├─ migrations/           DB 스키마 마이그레이션 (SQL, up/down)                        [dbmate]
 ├─ scripts/ 오프라인 자료 정규화·전처리·CSV 적재·선박 매핑 (backend uv 환경)
@@ -150,7 +150,7 @@ Docker 없이 e2e를 돌리려면 **빈 DB로 띄운 스택**에 대고 `e2e/`�
 | `HAEDAP_ALLOWED_HOSTS` | (비움) | localhost 외에 접속에 쓰는 호스트 이름·IP(쉼표 구분) |
 | `OPENAI_MODEL` | (비움) | 모델 서버의 정확한 모델 ID. 비우면 모델 답변 비활성 |
 | `OPENAI_API_KEY` | (비움) | `api.openai.com`의 OpenAI 서버에만 전송. 해당 호스트에서 필수 |
-| `DONGUK_AI_CHAT_API_KEY` | (비움) | `dongguk.edu` 또는 하위 도메인의 동국 서버에만 전송. 해당 호스트에서 필수 |
+| `DONGUK_AI_CHAT_API_KEY` | (비움) | `dongguk.edu`·하위 도메인 또는 동국 AI Chat 게이트웨이 `factchat-cloud.mindlogic.ai`에만 전송. 해당 호스트에서 필수 |
 | `LLM_API_BASE_URL` | `https://api.openai.com/v1` | OpenAI 호환 API 접두 주소. `/chat/completions`는 앱에서 붙임. backend에만 전달 |
 | `LLM_RESPONSE_FORMAT` | `text` | 기본은 JSON 출력 지시와 앱 내부 검증. 지원 서버·모델에서 `json_object` 또는 `json_schema` 선택 |
 | `MARITIME_DATA_API_TOKEN`, `MARITIME_DATA_DATABASE_URL` | (비움) | 해사 데이터 Tool 라우트(`/api/maritime-data/*`) 활성화 |

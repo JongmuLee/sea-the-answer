@@ -37,7 +37,11 @@
 - ‘사용 중’은 내부에서 지정한 적용 버전입니다. 외부 최신 규정 자동 확인 기능은 아닙니다.
 - DOCX·PPT·일반 텍스트 파일 등록은 아직 지원하지 않습니다(계획: [`plans/2026-10-08-team-module-integration.md`](plans/2026-10-08-team-module-integration.md)).
 
-DB가 비어 있으면 첫 요청 때 `backend/knowledge/seed.json`의 기본 문서가 자동 등록됩니다. 이전 Node 버전의 JSON 일괄 수집 명령(`npm run ingest`)은 제거되었으므로 문서는 화면(또는 같은 `/api/changes` API)으로 등록합니다.
+DB가 비어 있으면 첫 요청 때 `backend/knowledge/seed.json`의 기본 문서가 자동 등록됩니다.
+
+기본 문서는 IMO 공식 안내 요약 2건, 가상 예시 2건, 해사 기본 용어집, 그리고 원본 PDF가 함께 등록되는 원문 5건(해양환경관리법·선박안전법·해상교통안전법·선박직원법, USCG Navigation Rules Handbook)입니다. 원문은 `backend/knowledge/documents/`에 있으며 문서 화면의 "원문 PDF 열기"로 볼 수 있습니다. 한국 법령은 저작권법 제7조에 따라 보호 대상이 아니고 USCG 핸드북은 미국 정부 저작물이라 저장소에 함께 둡니다. IMO 협약 원문처럼 재배포가 허용되지 않은 문서는 넣지 않습니다.
+
+seed는 **빈 DB에서만** 적용됩니다. 이미 쓰던 DB에 새 기본 문서를 반영하려면 `docker compose down -v`로 초기화하거나(모든 데이터 삭제) 관리자 화면에서 해당 PDF를 직접 등록합니다. 법령 개정 시 원본 PDF를 국가법령정보센터에서 "저장 → PDF"로 다시 받아 같은 이름으로 바꾼 뒤 `cd backend && uv run python ../scripts/build_seed_documents.py`를 실행하면 해당 항목이 다시 만들어집니다(poppler의 `pdftotext` 필요: macOS `brew install poppler`, Ubuntu `apt install poppler-utils`). 이전 Node 버전의 JSON 일괄 수집 명령(`npm run ingest`)은 제거되었으므로 문서는 화면(또는 같은 `/api/changes` API)으로 등록합니다.
 
 ## 2. 역할과 승인
 

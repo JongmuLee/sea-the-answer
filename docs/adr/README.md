@@ -36,5 +36,6 @@
 | [0011](0011-tools-runtime-and-data-preparation.md) | 해사 runtime·준비 작업 분리와 공통 마이그레이션·명시적 선박 연결 | 제안 | 2026-10-13 |
 | [0012](0012-openai-compatible-chat-completions.md) | OpenAI 호환 Chat Completions 공통 호출과 로컬 인용 검증 | 대체됨(0013) | 2026-10-13 |
 | [0013](0013-provider-credential-isolation.md) | 공통 LLM 설정과 URL 호스트에 따른 공급자별 인증키 격리 | 채택 | 2026-10-14 |
+| [0014](0014-mindlogic-gateway-host.md) | 동국 AI Chat API 게이트웨이(Mindlogic) 호스트 계약 추가 | 제안 | 2026-10-14 |
 
 0002~0004는 이미 구현된 결정을 2026-10-08에 소급 기록한 것입니다. 날짜는 해당 결정이 들어간 버전의 날짜입니다.

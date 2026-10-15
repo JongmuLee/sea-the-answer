@@ -6,6 +6,7 @@ using `db.save_document(...)`, `db.answer(...)` and so on.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from uuid import uuid4
@@ -40,5 +41,14 @@ class Workspace(Database, UserStore, DocumentStore, OperationStore, ChangeStore,
             digest = hashlib.scrypt(b"1234", salt=salt.encode(), n=16384, r=8, p=1, dklen=64).hex()
             self.run("INSERT INTO users VALUES(%s,'admin','관리자','admin',%s,true,1)", (str(uuid4()), salt + ":" + digest))
         if not self.one("SELECT 1 FROM documents LIMIT 1"):
-            for raw in json.loads((BACKEND_DIR / "knowledge/seed.json").read_text(encoding="utf-8")):
-                self.save_document({"document": raw, "expectedId": "", "meta": {"scope": "all", "status": "active"}})
+            knowledge = BACKEND_DIR / "knowledge"
+            for raw in json.loads((knowledge / "seed.json").read_text(encoding="utf-8")):
+                payload = {"expectedId": "", "meta": {"scope": "all", "status": "active"}}
+                # "file" names an original PDF under knowledge/ (scripts/build_seed_documents.py).
+                file_name = raw.pop("file", None)
+                if file_name:
+                    path = (knowledge / file_name).resolve()
+                    if not (path.is_relative_to(knowledge.resolve()) and path.is_file()):
+                        raise RuntimeError(f"Seed document file not found: {file_name}")
+                    payload["file"] = {"name": path.name, "base64": base64.b64encode(path.read_bytes()).decode("ascii")}
+                self.save_document({**payload, "document": raw})

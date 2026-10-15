@@ -26,12 +26,12 @@
 | `LLM_API_BASE_URL` | 미설정·빈 값이면 `https://api.openai.com/v1` | API 접두 주소. `/chat/completions`는 포함하지 않으며, `/v1`이 필요한 공급자는 그 경로까지 지정 |
 | `OPENAI_MODEL` | 빈 값이면 모델 비활성 | 공급자가 제공하는 정확한 모델 ID. 자동으로 다른 모델로 치환하지 않음 |
 | `OPENAI_API_KEY` | 호스트가 정확히 `api.openai.com`이면 필수 | OpenAI 호스트에서만 `Authorization: Bearer ...` 전송 |
-| `DONGUK_AI_CHAT_API_KEY` | 호스트가 `dongguk.edu` 또는 그 하위 도메인이면 필수 | 동국 호스트에서만 `Authorization: Bearer ...` 전송. `DONGUK` 철자를 그대로 사용 |
+| `DONGUK_AI_CHAT_API_KEY` | 호스트가 `dongguk.edu`·그 하위 도메인 또는 정확히 `factchat-cloud.mindlogic.ai`이면 필수 | 동국 호스트에서만 `Authorization: Bearer ...` 전송. `DONGUK` 철자를 그대로 사용 |
 | `LLM_RESPONSE_FORMAT` | `text`(기본), `json_object`, `json_schema` 중 하나 | `text`는 요청의 `response_format` 생략. 나머지는 해당 서버·모델이 지원할 때만 선택 |
 
 기본 URL의 공백·끝 슬래시를 정리한 뒤 `/chat/completions`를 한 번 붙인다. `http`·`https` 외 스킴, URL에 포함된 사용자·비밀번호, 쿼리·fragment, 잘못된 주소는 설정 오류로 처리한다. 기본 OpenAI 주소의 끝 슬래시 유무로 키 필수 조건이 달라지지 않아야 한다.
 
-키 선택은 파싱한 URL의 소문자 호스트에만 의존한다. `api.openai.com`은 OpenAI 키, `dongguk.edu` 또는 `.dongguk.edu`로 끝나는 호스트는 동국 키를 사용한다. `api.openai.com.example.org`, `evil-dongguk.edu`, `dongguk.edu.example.org`처럼 도메인 경계가 다른 주소는 해당 공급자로 취급하지 않는다. URL 경로의 `OAOpenAI`·`dongguk` 문자열만으로 키를 선택하지 않는다. 알려진 공급자의 필수 키가 없으면 비활성으로 처리하며 다른 공급자 키로 대체하지 않는다. 로컬 Ollama와 나머지 호환 서버에는 두 키가 모두 설정되어 있어도 Authorization 헤더를 보내지 않는다. 다른 인증형 서버 지원은 별도 키·호스트 정책을 확정한 뒤 추가한다([ADR 0013](../adr/0013-provider-credential-isolation.md)).
+키 선택은 파싱한 URL의 소문자 호스트에만 의존한다. `api.openai.com`은 OpenAI 키, `dongguk.edu` 또는 `.dongguk.edu`로 끝나는 호스트와 정확히 `factchat-cloud.mindlogic.ai`인 동국 AI Chat 게이트웨이는 동국 키를 사용한다(다른 `*.mindlogic.ai` 호스트는 해당하지 않음, [ADR 0014](../adr/0014-mindlogic-gateway-host.md)). `api.openai.com.example.org`, `evil-dongguk.edu`, `dongguk.edu.example.org`처럼 도메인 경계가 다른 주소는 해당 공급자로 취급하지 않는다. URL 경로의 `OAOpenAI`·`dongguk` 문자열만으로 키를 선택하지 않는다. 알려진 공급자의 필수 키가 없으면 비활성으로 처리하며 다른 공급자 키로 대체하지 않는다. 로컬 Ollama와 나머지 호환 서버에는 두 키가 모두 설정되어 있어도 Authorization 헤더를 보내지 않는다. 다른 인증형 서버 지원은 별도 키·호스트 정책을 확정한 뒤 추가한다([ADR 0013](../adr/0013-provider-credential-isolation.md)).
 
 서버 재시작 전에 기존 `.env`의 `OPENAI_BASE_URL`은 `LLM_API_BASE_URL`로, `OPENAI_RESPONSE_FORMAT`은 `LLM_RESPONSE_FORMAT`으로 이름을 바꾼다. 이전 두 이름을 별칭으로 읽지 않으므로 이전 URL만 남기면 기본 OpenAI 주소가 선택된다. 기존 `OPENAI_API_KEY`에 동국 키를 넣었다면 `DONGUK_AI_CHAT_API_KEY`로 옮긴다. 기존 DB·모델 설정과 다른 비밀 값은 보존한다.
 
@@ -42,7 +42,7 @@
 | 백엔드와 모델 위치 | `LLM_API_BASE_URL` 예시 | 전제 |
 |---|---|---|
 | OpenAI | `https://api.openai.com/v1` | 유효한 키·허용된 모델 필요 |
-| 동국 AI Chat | 관리자가 제공한 `dongguk.edu` 또는 하위 도메인의 API 접두 주소 | `DONGUK_AI_CHAT_API_KEY` 필요. 웹 채팅 화면 URL을 대신 넣지 않음. 실제 값·인증·모델은 미확정 |
+| 동국 AI Chat | `https://factchat-cloud.mindlogic.ai/v1/gateway` | `DONGUK_AI_CHAT_API_KEY`(API Gateway 메뉴에서 발급)와 정확한 모델 ID 필요. 이 호스트는 `/chat/completions/`(끝 슬래시)로 호출([ADR 0014](../adr/0014-mindlogic-gateway-host.md)). 실제 호출은 미검증 |
 | PC에서 직접 실행하는 백엔드 → 같은 PC의 Ollama | `http://127.0.0.1:11434/v1` | Ollama 실행·선택 모델 설치 필요 |
 | Docker Desktop 백엔드 → 호스트 PC의 Ollama | `http://host.docker.internal:11434/v1` | 호스트의 Ollama 수신 주소·방화벽과 컨테이너 연결 가능 여부 확인 |
 | 같은 Docker 네트워크의 Ollama 서비스 | `http://ollama:11434/v1` | `ollama`라는 서비스가 실제로 존재할 때만 사용. #8에는 이 서비스가 없음 |
@@ -158,12 +158,12 @@ Chat Completions의 텍스트는 `choices[0].message.content`에서 읽는다. J
 - [x] `insufficient=true`, 빈 근거, 발췌 모드에서 각각 정해진 동작과 요청 횟수를 확인한다.
 - [x] 네트워크 오류·타임아웃·HTTP 오류에서 기존 공개 경고 코드를 유지하고 키가 노출되지 않는다.
 - [x] PR #11 당시 Compose는 모델 설정을 backend에만 전달하며 기본 e2e에는 실제 모델 설정을 전달하지 않았다. 당시 Linux CI 검사·격리 e2e 통과는 이전 변경 검증이며, 현재 CI 워크플로는 별도 PR로 분리한다.
-- [ ] 실제 동국 AI Chat에서 문서 질문 1건 이상이 `generation=llm`, 유효 인용, 모델 실패 경고 없음으로 확인된다.
+- [x] 실제 동국 AI Chat에서 문서 질문 1건 이상이 `generation=llm`, 유효 인용, 모델 실패 경고 없음으로 확인된다. (2026-10-14, `https://factchat-cloud.mindlogic.ai/v1/gateway` · `gpt-6-luna`, [변경 이력](../changelog.md))
 - [x] 2026-10-14 검토 반영 코드에 별도 워크플로만 추가한 검증 브랜치에서 PostgreSQL 포함 백엔드 245개, 프런트 테스트·빌드, Compose 3종·Docker e2e와 정리 통과. 실제 모델 연결 검증은 포함하지 않는다([검증 기록](../changelog.md)).
 - [ ] 실제 로컬 Ollama에서도 위 기준을 확인하고, Docker 사용 시 컨테이너에서 호스트 모델에 도달함을 확인한다.
 
 ## 6. 열린 질문
 
-- 동국 AI Chat의 웹 접속 링크는 전달받았다. 모델 호출용 API 주소·모델 ID·인증·지원 옵션은 아직 미확정이다. 일반적인 OpenAI 호환 계약을 준비했으며 실제 서버 동작을 확인한 것은 아니다.
+- 동국 AI Chat API 기본 주소는 `https://factchat-cloud.mindlogic.ai/v1/gateway`로 확인했다(2026-10-14). 모델 ID·지원 옵션과 실제 호출 성공은 아직 미확인이다. 일반적인 OpenAI 호환 계약을 준비했으며 실제 서버 동작을 확인한 것은 아니다.
 - 선택적 JSON 형식은 `LLM_RESPONSE_FORMAT=text` 기본값으로 확정했다. 출력 토큰 제한 옵션이 필요한 환경에서는 해당 공급자·모델 지원을 확인해 후속 계약을 정한다. 특정 모델의 미지원 옵션을 다른 모델로 바꿔 회피하지 않는다.
 - 로컬 모델의 최초 적재·응답 시간이 25초를 넘는다면 시간 제한 정책을 프록시 설정과 함께 정한다.

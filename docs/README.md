@@ -66,6 +66,7 @@
 | [0011](adr/0011-tools-runtime-and-data-preparation.md) | 해사 runtime·준비 작업 분리와 공통 마이그레이션·명시적 선박 연결 | 제안 |
 | [0012](adr/0012-openai-compatible-chat-completions.md) | OpenAI 호환 Chat Completions 공통 호출과 로컬 인용 검증 | 대체됨(0013) |
 | [0013](adr/0013-provider-credential-isolation.md) | 공통 LLM 설정과 URL 호스트에 따른 공급자별 인증키 격리 | 채택 |
+| [0014](adr/0014-mindlogic-gateway-host.md) | 동국 AI Chat API 게이트웨이(Mindlogic) 호스트 계약 추가 | 제안 |
 
 ## 작성 규칙 요약
 

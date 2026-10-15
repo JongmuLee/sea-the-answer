@@ -75,7 +75,7 @@ def grounded_statements(question: str, evidence: list[dict], language: str, sett
         }}
     headers = {"Authorization": "Bearer " + settings.api_key} if settings.api_key else {}
     post = client.post if client is not None else httpx.post
-    response = post(settings.base_url + "/chat/completions", json=body, headers=headers,
+    response = post(settings.base_url + settings.completions_path, json=body, headers=headers,
                     timeout=25, follow_redirects=False)
     response.raise_for_status()
     try:

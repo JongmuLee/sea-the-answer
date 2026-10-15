@@ -123,6 +123,10 @@ def test_chat_completions_request_and_valid_citations(monkeypatch, model_server,
     "https://dongguk.edu.evil.example/OAOpenAI/v1",
     "https://gateway.example/OAOpenAI/v1",
     "https://gateway.example/api.openai.com/aichat.dongguk.edu/v1",
+    "https://factchat-cloud.mindlogic.ai.evil.example/v1/gateway",
+    "https://evil-factchat-cloud.mindlogic.ai/v1/gateway",
+    "https://other.mindlogic.ai/v1/gateway",
+    "https://gateway.example/factchat-cloud.mindlogic.ai/v1/gateway",
 ])
 def test_lookalike_hosts_and_paths_never_receive_provider_credentials(monkeypatch, model_server, base):
     monkeypatch.setenv("LLM_API_BASE_URL", base)
@@ -363,3 +367,33 @@ def test_extractive_or_no_evidence_does_not_contact_model(monkeypatch, model_ser
     result = db.answer({"id": "guest-test"}, {"question": "원문 근거", "task": "documents", "mode": mode})
     assert result["generation"] == "extractive"
     assert calls == []
+
+
+@pytest.mark.parametrize("base", [
+    "https://factchat-cloud.mindlogic.ai/v1/gateway",
+    "https://factchat-cloud.mindlogic.ai/v1/gateway/",
+    "https://FACTCHAT-CLOUD.MINDLOGIC.AI./v1/gateway",
+])
+def test_mindlogic_gateway_uses_dongguk_key_and_documented_path(monkeypatch, model_server, base):
+    monkeypatch.setenv("LLM_API_BASE_URL", base)
+    monkeypatch.setenv("OPENAI_MODEL", "supplied-model-id")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-only-secret")
+    monkeypatch.setenv("DONGUK_AI_CHAT_API_KEY", "dongguk-only-secret")
+    calls = model_server(completion())
+    assert AnswerStore.grounded_statements("질문", EVIDENCE, "ko") == [STATEMENT]
+    assert len(calls) == 1
+    assert calls[0].url.host.rstrip(".") == "factchat-cloud.mindlogic.ai"
+    assert calls[0].url.path == "/v1/gateway/chat/completions/"
+    assert calls[0].headers.get("Authorization") == "Bearer dongguk-only-secret"
+    assert "dongguk-only-secret" not in repr(config.llm_settings())
+
+
+@pytest.mark.parametrize("missing_value", [None, "", " "])
+def test_mindlogic_gateway_never_falls_back_to_openai_key(monkeypatch, model_server, missing_value):
+    monkeypatch.setenv("LLM_API_BASE_URL", "https://factchat-cloud.mindlogic.ai/v1/gateway")
+    monkeypatch.setenv("OPENAI_MODEL", "supplied-model-id")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-only-secret")
+    if missing_value is not None:
+        monkeypatch.setenv("DONGUK_AI_CHAT_API_KEY", missing_value)
+    assert config.llm_settings() is None
+    assert config.llm_configured() is False
