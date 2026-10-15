@@ -292,6 +292,62 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     expect(await records()).toHaveLength(22);
   });
 
+  await test.step('Skills: selected documents and checklist stay within scope without a model', async () => {
+    await go('skills');
+    await expect(page.getByRole('heading', { name: '업무 스킬', exact: true })).toBeVisible();
+    const docs = (await api('/api/documents')).data.documents.filter(d => d.active);
+    const source = docs.find(d => d.sections.some(s => s.text.includes('연료'))) || docs[0];
+    const question = source.sections[0].text.slice(0, 80);
+    await page.getByLabel('사용할 문서', { exact: true }).selectOption(source.id);
+    await page.getByLabel('질문 또는 작업 목적').fill(question);
+    const response = page.waitForResponse(r => r.url().endsWith('/api/skills/run') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: '스킬 실행', exact: true }).click();
+    const value = await (await response).json();
+    expect(value.evidence.length).toBeGreaterThan(0);
+    expect(value.evidence.every(e => e.document_id === source.id)).toBe(true);
+    expect(value.generation).toBe('extractive');
+    await expect(page.locator('.skill-evidence').first()).toBeVisible();
+    await page.getByLabel('실행할 스킬').selectOption('checklist');
+    await page.getByRole('button', { name: '스킬 실행', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '점검 항목 초안', exact: true })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: '점검 항목 1', exact: true })).not.toBeChecked();
+  });
+
+  await test.step('Skills: operation summary, report preview and explicit draft save', async () => {
+    const ops = (await api('/api/operations')).data;
+    const ship = ops.ships[0];
+    const days = ops.records.filter(r => r.ship === ship.id).map(r => r.date).sort();
+    await page.getByLabel('실행할 스킬').selectOption('operation-summary');
+    await page.getByLabel('선박', { exact: true }).selectOption(ship.id);
+    await page.getByLabel('시작일', { exact: true }).fill(days[0]);
+    await page.getByLabel('종료일', { exact: true }).fill(days.at(-1));
+    await page.getByRole('button', { name: '스킬 실행', exact: true }).click();
+    await expect(page.locator('.skill-metrics')).toContainText('계산 CO₂');
+    const before = (await api('/api/reports')).data.reports.length;
+    await page.getByLabel('실행할 스킬').selectOption('report-draft');
+    const response = page.waitForResponse(r => r.url().endsWith('/api/skills/run') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: '스킬 실행', exact: true }).click();
+    const value = await (await response).json();
+    await expect(page.getByLabel('보고서 초안 내용')).toContainText('검토용');
+    expect((await api('/api/reports')).data.reports).toHaveLength(before);
+    await page.getByRole('button', { name: '새 보고서 초안으로 저장', exact: true }).click();
+    await expect(page.getByRole('button', { name: '초안 저장됨', exact: true })).toBeDisabled();
+    expect((await api('/api/reports')).data.reports).toHaveLength(before + 1);
+    await page.getByLabel('실행할 스킬').selectOption('qa-evaluation');
+    await page.getByLabel('평가할 내 응답').selectOption(value.id);
+    await page.getByRole('button', { name: '스킬 실행', exact: true }).click();
+    await expect(page.locator('.skill-result table')).toContainText('사람 검토 필요');
+  });
+
+  await test.step('Skills: MRV requires an explicit real vessel mapping', async () => {
+    const ship = (await api('/api/operations')).data.ships[0];
+    await page.getByLabel('실행할 스킬').selectOption('mrv-analysis');
+    await page.getByLabel('선박', { exact: true }).selectOption(ship.id);
+    await page.getByLabel('MRV 보고연도').fill('2018');
+    await page.getByRole('button', { name: '스킬 실행', exact: true }).click();
+    await expect(page.locator('article')).toContainText('명시적 연결이 필요합니다');
+  });
+
   await test.step('Mobile navigation and overflow', async () => {
     await go('chat');
     await page.waitForFunction(() => !document.querySelector('.toast'));

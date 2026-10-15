@@ -1,4 +1,5 @@
 import React from 'react';
+import { SkillResult } from '../components/skill-result';
 import * as helpers from '../components/common';
 export function createMainViews(model, views) {
   const noop = () => {};
@@ -9,6 +10,7 @@ export function createMainViews(model, views) {
   const { authPage, adminPage, operationAnswer, roleName } = views;
   const pageNames = {
     chat: '통합 질문',
+    skills: '업무 스킬',
     docs: '문서',
     document: '문서 내용',
     operations: '운항 정보',
@@ -156,7 +158,7 @@ export function createMainViews(model, views) {
             </React.Fragment>
           );
         })}
-        {!a.evidence.length
+        {!a.evidence.length && !a.skill
           ? notice(
               en
                 ? 'Insufficient document evidence. Ask the responsible officer.'
@@ -165,6 +167,7 @@ export function createMainViews(model, views) {
             )
           : ''}
         {operationAnswer(a)}
+        {a.skill && <><h3>{a.skill.name}</h3><SkillResult answer={a} /></>}
         {a.toolRuns.map((t, __index) => (
           <React.Fragment key={__index}>
             {
@@ -617,6 +620,7 @@ export function createMainViews(model, views) {
           <div className={'navlabel'}>{'WORKSPACE'}</div>
           {[
             ['chat', 'chat', '통합 질문'],
+            ['skills', 'spark', '업무 스킬'],
             ['docs', 'file', '문서'],
             ['operations', 'chart', '운항 정보'],
             ['reports', 'edit', '보고서'],
