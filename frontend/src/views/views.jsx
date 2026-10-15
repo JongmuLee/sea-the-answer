@@ -1,5 +1,6 @@
 import React from 'react';
 import { SkillResult } from '../components/skill-result';
+import SkillsPanel from '../components/skills-panel';
 import * as helpers from '../components/common';
 export function createMainViews(model, views) {
   const noop = () => {};
@@ -10,7 +11,6 @@ export function createMainViews(model, views) {
   const { authPage, adminPage, operationAnswer, roleName } = views;
   const pageNames = {
     chat: '통합 질문',
-    skills: '업무 스킬',
     docs: '문서',
     document: '문서 내용',
     operations: '운항 정보',
@@ -37,7 +37,7 @@ export function createMainViews(model, views) {
   }
   function composer() {
     return (
-      <form id={'askForm'} className={'composer'}>
+      <><form id={'askForm'} className={'composer'}>
         <textarea
           id={'question'}
           aria-label={'질문 입력'}
@@ -102,7 +102,7 @@ export function createMainViews(model, views) {
             {I('send')}
           </button>
         </div>
-      </form>
+      </form><SkillsPanel group="documents" /></>
     );
   }
   function answerView(a) {
@@ -201,6 +201,7 @@ export function createMainViews(model, views) {
             ? btn(en ? 'Choose report template' : '보고서 양식 선택', 'reportList', '', 'file')
             : ''}
         </div>
+        <SkillsPanel group="evaluation" targetAnswerId={a.id} />
       </article>
     );
   }
@@ -586,6 +587,7 @@ export function createMainViews(model, views) {
             </div>
           </>
         }
+        {d.active && <SkillsPanel group="document" documentId={d.id} />}
       </>
     );
   }
@@ -620,7 +622,6 @@ export function createMainViews(model, views) {
           <div className={'navlabel'}>{'WORKSPACE'}</div>
           {[
             ['chat', 'chat', '통합 질문'],
-            ['skills', 'spark', '업무 스킬'],
             ['docs', 'file', '문서'],
             ['operations', 'chart', '운항 정보'],
             ['reports', 'edit', '보고서'],

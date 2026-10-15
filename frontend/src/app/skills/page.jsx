@@ -1,2 +1,2 @@
-import SkillsPanel from '../../components/skills-panel';
-export default function Page(){return <SkillsPanel />;}
+import { redirect } from 'next/navigation';
+export default function Page(){redirect('/chat');}

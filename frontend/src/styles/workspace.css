@@ -9,7 +9,10 @@
 /* Keep the longer sidebar subtitle on one line. */
 .sidebar .brand small{letter-spacing:1px;white-space:nowrap}
 .skills-page { max-width: 1100px; margin: 0 auto; }
-.skills-page > header { margin-bottom: 24px; }
+.workflow-panel { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: #fff; }
+.workflow-panel > summary { cursor: pointer; font-weight: 600; color: var(--teal); }
+.workflow-panel[open] > summary { margin-bottom: 16px; }
+.workflow-panel > .skill-form { margin-top: 12px; }
 .skill-form { display: grid; gap: 16px; }
 .skill-form > label { display: grid; gap: 7px; }
 .skill-form select, .skill-form textarea, .skill-form input:not([type=checkbox]) { width: 100%; }

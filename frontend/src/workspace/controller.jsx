@@ -102,7 +102,6 @@ export function createWorkspace() {
   }
   const routes = {
     chat: '/chat',
-    skills: '/skills',
     docs: '/documents',
     operations: '/operations',
     reports: '/reports',
@@ -130,7 +129,6 @@ export function createWorkspace() {
     state.page =
       {
         chat: 'chat',
-        skills: 'skills',
         documents: chunks[1] ? 'document' : 'docs',
         operations: 'operations',
         reports: chunks[1] ? 'editor' : 'reports',
