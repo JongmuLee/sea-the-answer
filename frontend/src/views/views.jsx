@@ -119,7 +119,7 @@ export function createMainViews(model, views) {
                 ? '답변 근거를 확인해 주세요'
                 : '답변과 확인 근거'}
           </h2>
-          {badge(a.generation === 'llm' ? 'AI 초안' : '문서 검색', 'teal')}
+          {badge(a.skill ? '업무 스킬' : a.generation === 'llm' ? 'AI 초안' : '문서 검색', 'teal')}
         </div>
         <p className={'small muted'}>{a.notice}</p>
         {/* Only model warnings mean the AI answer failed; e.g. OPERATIONS_CONTEXT_REQUIRED has its own notice. */}

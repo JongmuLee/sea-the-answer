@@ -333,6 +333,18 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     await page.getByRole('button', { name: '새 보고서 초안으로 저장', exact: true }).click();
     await expect(page.getByRole('button', { name: '초안 저장됨', exact: true })).toBeDisabled();
     expect((await api('/api/reports')).data.reports).toHaveLength(before + 1);
+    await page.getByRole('button', { name: '저장한 초안 열기', exact: true }).click();
+    await expect(page).toHaveURL(/\/reports\//);
+    // The earlier report flow leaves a dirty editor draft; preserve its existing guard.
+    await expect(page.getByRole('heading', { name: '작성 중인 초안을 바꿀까요?' })).toBeVisible();
+    await confirm();
+    await dialogClosed();
+    await expect(page.locator('#report-text')).toHaveValue(value.result.draft.text);
+    await go('reports');
+    const savedRow = page.locator('.docrow').filter({ hasText: value.result.draft.title });
+    await expect(savedRow).toContainText(`${value.result.from} ~ ${value.result.to}`);
+    await go('skills');
+    await page.getByLabel('질문 또는 작업 목적').fill('저장된 보고서 초안의 근거를 점검해줘');
     await page.getByLabel('실행할 스킬').selectOption('qa-evaluation');
     await page.getByLabel('평가할 내 응답').selectOption(value.id);
     await page.getByRole('button', { name: '스킬 실행', exact: true }).click();
@@ -350,6 +362,9 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
 
   await test.step('Mobile navigation and overflow', async () => {
     await go('chat');
+    await action('history').click();
+    await page.locator('[data-action=historyAnswer]').first().click();
+    await expect(page.locator('article.answer')).toContainText('업무 스킬');
     await page.waitForFunction(() => !document.querySelector('.toast'));
     await page.screenshot({ path: testInfo.outputPath('desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });

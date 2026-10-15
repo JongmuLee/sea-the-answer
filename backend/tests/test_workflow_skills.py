@@ -304,7 +304,8 @@ def test_postgres_selected_document_scope_and_permission_before_ranking(database
     }
 
 
-def test_postgres_report_is_preview_until_explicit_save_and_qa_is_owned(database):
+@pytest.mark.parametrize("template", ["mrv", "noon"])
+def test_postgres_report_is_preview_until_explicit_save_and_qa_is_owned(database, template):
     database.change(
         {"id": "admin", "role": "admin"},
         "ship.save",
@@ -338,16 +339,23 @@ def test_postgres_report_is_preview_until_explicit_save_and_qa_is_owned(database
         headers=headers,
         json=body(
             "report-draft",
+            template=template,
             context={"ship": "skills-ship", "from": "2026-01-01", "to": "2026-01-03"},
         ),
     )
     assert response.status_code == 200
     answer = response.json()
-    assert answer["result"]["missing_days"] == 2 and answer["result"]["sample"] is True
+    assert answer["result"]["missing_days"] == (2 if template == "mrv" else 0)
+    assert answer["result"]["sample"] is True
     assert database.one("SELECT count(*) AS n FROM reports")["n"] == before
     saved = client.post("/api/reports", headers=headers, json=answer["result"]["draft"])
     assert saved.status_code == 200 and saved.json()["report"]["status"] == "draft"
     assert database.one("SELECT count(*) AS n FROM reports")["n"] == before + 1
+    metadata = saved.json()["report"]["body"]
+    assert metadata["ship"] == "skills-ship" and metadata["template"] == template
+    assert metadata["from"] == "2026-01-01"
+    assert metadata["to"] == ("2026-01-03" if template == "mrv" else "2026-01-01")
+    assert metadata["scope"]["to"] == "2026-01-03"  # Original requested range is retained.
     evaluated = client.post(
         "/api/skills/run",
         headers=headers,

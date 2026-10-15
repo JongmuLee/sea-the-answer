@@ -446,6 +446,10 @@ def run(db, user, payload):
                     "version": 0,
                     "body": {
                         "skill": body.skill,
+                        "template": body.template,
+                        "ship": result["ship"]["id"],
+                        "from": result["from"],
+                        "to": result["to"],
                         "scope": body.context.model_dump(by_alias=True),
                         "recordIds": [
                             {"id": r["id"], "version": r["version"]}

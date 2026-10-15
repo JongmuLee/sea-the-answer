@@ -24,4 +24,6 @@ MRV는 선택 앱 선박에 명시적으로 연결된 실제 vessel_id만 사용
 
 보고서는 검토용 draft payload만 반환한다. 저장은 사용자가 별도 저장 버튼을 누를 때 기존 POST /api/reports로 수행하며 제출·승인은 하지 않는다. 질의평가는 본인 저장 응답을 다시 권한 검사한 뒤 인용·범위·참고값 계약을 점검한다. 원문 사실성/의미적 정답성은 `manual_review_required`로 남기고 자동 정답 점수로 포장하지 않는다.
 
+초안 body는 기존 보고서 화면의 `template, ship, from, to, recordIds, sample`을 유지하고 `skill, scope`를 추가한다. `from/to`는 실제 집계 기간, `scope`는 요청 기간이다. 기존 질의 이력에서 스킬 응답은 `업무 스킬`로 표시한다.
+
 스킬 실행은 queries/query_owner/audit에 기록한다. schema 변경은 없다. skill의 SKILL.md는 고정 서버 코드에만 연결하며 파일 경로나 실행 코드를 요청에서 받지 않는다. LLM이 꺼져 있어도 전 기능이 실행된다.

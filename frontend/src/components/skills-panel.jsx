@@ -54,7 +54,10 @@ export default function SkillsPanel() {
     setSaving(true);setError('');
     try{
       const value=await workspace.api.request('/api/reports',answer.result.draft);
-      if(sequence===generation.current)setSavedId(value.report.id);
+      if(sequence===generation.current){
+        workspace.acceptSavedReport(value.report,identity);
+        setSavedId(value.report.id);
+      }
     }catch(e){if(sequence===generation.current)setError(e.message);}
     finally{if(sequence===generation.current)setSaving(false);}
   }
