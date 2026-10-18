@@ -314,7 +314,7 @@ export function createExtendedViews(model, views) {
                     {
                       <div className={'docrow'}>
                         <div className={'docmain'}>
-                          <h3>{changeLabel(c.kind)}</h3>
+                          <h3>{changeLabel(c.kind, c.payload)}</h3>
                           <p className={'small muted'}>
                             {c.actor_name || '삭제된 사용자'}
                             {' · '}
@@ -511,7 +511,8 @@ export function createExtendedViews(model, views) {
       </>
     );
   }
-  function changeLabel(kind) {
+  function changeLabel(kind, payload) {
+    if (kind === 'document.save' && payload?.mode === 'metadata') return '문서 정보 수정';
     return (
       {
         'document.save': '문서 등록·개정',
@@ -528,6 +529,8 @@ export function createExtendedViews(model, views) {
     const p = c.payload;
     return (
       p.document?.title ||
+      (p.document?.id && state.docs.find((d) => d.logical_id === p.document.id)?.title) ||
+      p.document?.id ||
       p.title ||
       p.name ||
       (p.rows ? p.rows.length + '개 기록' : p.date || p.id || '')

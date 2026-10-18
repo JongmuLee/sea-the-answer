@@ -135,6 +135,7 @@ erDiagram
 
 - 대부분의 ID는 `randomUUID()`. 문서는 내용 해시 기반 개정 ID.
 - **낙관적 잠금**: `ships`, `operations`, `reports`, `users`는 `version` 정수를 갖고, 요청의 `version`이 DB와 다르면 `409 VERSION_CONFLICT`. 저장 시 +1. 문서는 `expectedId`(현재 개정 ID)와 `expectedMetaRevision`으로 같은 검사를 합니다.
+- 문서의 `document.save` / `mode: "metadata"`는 두 버전 값을 필수로 검사하고 기존 `document_meta.body`만 갱신합니다. 현재 개정 행 잠금 안에서 검사·저장을 수행하며, `body.revision`은 이전 값보다 증가합니다. 문서 개정 ID·확인일·청크·PDF는 유지하고 열람 범위는 이전 개정본에도 반영합니다. 테이블 추가나 백업 형식 변경은 없습니다.
 - 변경은 PostgreSQL 트랜잭션 하나로 처리하며 충돌 제어가 필요한 기존 행은 `FOR UPDATE`로 잠급니다.
 - 일반 사용자 소유자 ID: `guest_` + `haedap_guest` 쿠키 값의 SHA-256.
 

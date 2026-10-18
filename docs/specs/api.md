@@ -116,6 +116,35 @@
 
 문서 삭제는 행을 지우지 않고 `status:'deleted'`로 검색·열람에서 제외합니다. 페이지 번호 없는 기존 자료는 `페이지 미지정`으로 표시합니다.
 
+### 문서 정보만 수정 (2026-10-18 구현)
+
+같은 `POST /api/changes`, `kind: "document.save"`에서 `payload.mode: "metadata"`를 사용한다. 관리자 권한·CSRF·변경 이력·트랜잭션은 기존 경로를 그대로 적용한다. 예시 payload:
+
+```json
+{
+  "mode": "metadata",
+  "document": {"id": "manual-001"},
+  "expectedId": "manual-001-current-revision-id",
+  "expectedMetaRevision": 1792281600000,
+  "meta": {"issuer": "수정한 발행기관", "scope": "admin"}
+}
+```
+
+- `expectedId`와 `expectedMetaRevision`은 편집을 시작할 때 조회한 실제 값으로 반드시 보낸다. 현재 개정 행을 잠근 뒤 두 값을 검사하며 불일치 시 409를 반환한다.
+- `document`에는 논리 ID만 허용한다. `file`과 본문·제목·버전 등 추가 document 필드는 400으로 거부한다.
+- `meta`는 `scope`, `status`, `issuer`(≤200자), `issuedAt`, `revisedAt`(빈 문자열 또는 유효한 YYYY-MM-DD), `applicability`(≤1,000자) 중 한 개 이상이다. 생략한 기존 정보와 확장 필드는 유지한다. `revision` 등 다른 키는 거부한다.
+- `documents`의 ID·hash·확인일, `chunks`, `chunk_pages`, `document_files`는 수정하지 않는다. 전처리도 호출하지 않는다. 열람 범위는 기존처럼 이전 개정본에도 적용한다.
+- 응답은 기존 `{id, status}`를 유지한다. 변경이 없으면 `unchanged`, 있으면 `updated`와 증가한 `meta.revision`을 다음 조회에서 확인한다.
+- `mode` 생략 또는 `content`는 기존 전체 문서 등록·개정 계약을 사용한다. 제목·버전·종류·조항·URL 변경은 이 경로이며 기존 개정 해시 규칙을 유지한다.
+
+화면은 변경이 없으면 요청을 생략하고, 수정 화면에서 기본으로 정보만 수정한다. 본문·버전 개정은 새 PDF 추출 또는 원문 전체 입력이 필요하다. `GET /api/documents`의 `sections`는 검색 청크이며 편집용 원문으로 재전송하지 않는다. 별도 원문 저장소·원문 조회 API·기존 청크 재색인은 이번 변경에 포함하지 않는다.
+
+### 화면의 페이지 본문 변환 (2026-10-18 보완)
+
+- `frontend/src/lib/pdf.js`의 `textToSections`가 검토한 본문을 기존 `document.sections` 입력으로 변환한다. 첫 `--- PAGE n ---` 구분자 앞의 본문은 `page: null`로 보존하며 빈 본문은 제외한다. 표시된 페이지 번호와 입력 순서는 유지한다.
+- 페이지별 본문이 19,000 UTF-16 코드 단위를 넘으면 문단→문장→줄→공백 경계를 우선한다. 한도 40% 이후의 경계를 우선하고, 없으면 앞쪽 공백까지 찾는다. 경계가 없는 긴 문자열은 한도 안에서 나누되 서로게이트 쌍과 CRLF는 쪼개지 않는다. 본문 양끝 공백 외에 일반적인 분할 경계의 공백·줄바꿈은 원래대로 남기며, 공백만 있는 조각은 제외한다.
+- 이 분할은 기존 API 입력 길이 제한을 지키기 위한 것이다. 페이지를 서로 합치지 않으며 최종 검색 청크 생성은 아래 Python 전처리가 계속 담당한다. API 형식·백엔드·DB는 이 보완에서 변경하지 않는다. 이미 저장된 청크는 자동 변경하지 않는다.
+
 ### Python 문서 전처리 계약 (2026-10-13 확정)
 
 현재 등록은 `POST /api/changes`의 `kind: "document.save"`이다. PDF.js가 만든 페이지별 `sections`와 선택적 `file`을 받고, `backend/api/store/documents.py`의 `DocumentStore.save_document`가 저장한다. raw PDF만 보내는 새 업로드 API는 추가하지 않는다.
@@ -127,6 +156,7 @@
 - 명시적인 Part/Chapter/Section 머리말과 ABS 규정 꼬리말이 3개 이상 서로 다른 페이지 가장자리에서 반복될 때만 제거한다. 제거한 머리말 중 가장 구체적인 절 제목은 `heading`에 보존한다. 본문 중간의 같은 문구와 조항 제목은 보존한다.
 - 번호 있는 짧은 조항 제목과 TABLE/FIGURE 제목은 별도 블록을 시작하고 `heading`에 반영한다. 긴 블록은 문단→문장→줄→공백 경계 순으로 최대 길이 안에서 나눈다. 표 블록은 문장보다 줄 경계를 우선한다. 경계가 없는 긴 문자열만 강제 분할한다.
 - 기존 문서 hash와 `unchanged` 판정을 유지한다. 이미 등록된 동일 문서/재활성화된 이전 개정본의 청크는 다시 쓰지 않는다. 변경된 청킹은 새 문서·새 내용의 개정부터 적용된다. 기존 청크를 바꾸는 재색인은 별도 작업이다.
+- 새 개정본은 전처리를 한 번 수행하고, 결과가 0개면 400 `INVALID_INPUT`으로 거부한다. 이전 개정본의 활성 상태를 바꾸기 전에 검사한다. 기존 동일 해시·과거 개정본의 청크는 재검사·재생성하지 않는다.
 - API 응답·PostgreSQL 테이블·열람 범위·인용 검증은 그대로 유지한다. 검색은 현재 Python의 단어 포함 점수 방식이다.
 
 CLI 일괄 수집 명령은 제거되었습니다(Node 버전의 `npm run ingest`). 빈 DB의 첫 요청 때 `backend/knowledge/seed.json`(위 `document` 객체 배열)이 자동 등록됩니다.
