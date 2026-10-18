@@ -113,6 +113,7 @@ erDiagram
 - `status` 전이: `draft` → (검토 요청) `review` → (승인) `approved` / (반려) `draft`. `review`·`approved`는 수정 불가 → 복사해 새 초안.
 - `body`(≤50,000자 JSON): 생성 초안은 `{template:'noon'|'mrv', ship, from, to, recordIds:[{id,version}], sample}`, 승인 시 `approvedBy`, `approvedAt` 추가.
 - 열람: 관리자, 소유자, 또는 `approved` — 단, `sources`의 모든 문서를 열람할 수 있어야 함.
+- 관리자 삭제: 버전을 검사한 뒤 `report_meta`·`reports` 행을 같은 트랜잭션에서 삭제한다. 대기 검토 요청은 삭제 사유를 기록해 `rejected`로 종료하고 감사·검토 이력은 보존한다. 검토 처리와 삭제는 동일한 보고서 행 잠금을 사용한다.
 
 ## 5. 사용자·이력·운영
 

@@ -8,3 +8,7 @@
 
 /* Keep the longer sidebar subtitle on one line. */
 .sidebar .brand small{letter-spacing:1px;white-space:nowrap}
+.sidebar button.brand{width:100%;background:transparent;text-align:left}
+.sidebar .brandmark{flex-shrink:0}
+.btn.danger-outline{color:var(--danger);border-color:var(--danger);background:#fff}
+.btn.danger-outline:hover{color:var(--danger);border-color:var(--danger);background:#fff5f4}

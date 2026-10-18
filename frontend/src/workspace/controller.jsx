@@ -602,7 +602,7 @@ export function createWorkspace() {
     navigate('editor');
   }
   async function saveReport() {
-    if (state.saving) return false;
+    if (state.saving || state.deletingReport) return false;
     state.reportError = '';
     if (!state.draft.title.trim() || !state.draft.text.trim()) {
       state.reportError = '제목과 본문을 입력해 주세요.';
@@ -827,6 +827,41 @@ export function createWorkspace() {
       return;
     }
     await saveChange('document.save', payload);
+  }
+  async function deleteReport() {
+    requireAdmin();
+    if (state.saving || state.deletingReport) return;
+    const { id, version, title } = state.draft;
+    const userId = state.user.id;
+    if (!id || !version) return;
+    if (!(await confirmAction('보고서를 삭제할까요?', `‘${title}’을 삭제합니다. 검토 대기 요청도 종료되며, 삭제하면 바로 반영됩니다.`, '삭제')))
+      return;
+    if (state.user?.id !== userId || state.saving || state.deletingReport) return;
+    requireAdmin();
+    state.deletingReport = true;
+    state.reportError = '';
+    render();
+    try {
+      await api.deleteReport({ id, version });
+      if (state.user?.id !== userId) return;
+      state.reports = state.reports.filter((report) => report.id !== id);
+      if (state.draft.id === id) {
+        state.draft = blankDraft();
+        state.draftRevision++;
+        state.dirty = false;
+        state.conflict = null;
+        state.localFailed = !writeLocal(draftKey(), state.draft);
+        if (state.page === 'editor') navigate('reports');
+      }
+      toast('보고서를 삭제했어요.');
+    } catch (error) {
+      if (state.user?.id === userId && state.draft.id === id)
+        state.reportError = error.message;
+      throw error;
+    } finally {
+      state.deletingReport = false;
+      render();
+    }
   }
   async function deleteDocument(id) {
     requireAdmin();
@@ -1294,13 +1329,16 @@ export function createWorkspace() {
       state.authError = '';
       render();
     },
+    home: () => navigate('chat'),
     newQuestion: () => {
       state.askSequence++;
       state.busy = false;
+      state.slow = false;
       state.answer = null;
       state.askError = '';
       state.question = '';
-      render();
+      state.pendingQuestion = '';
+      navigate('chat');
     },
     retryQuestion: () => ask(state.pendingQuestion || state.question),
     history: showHistory,
@@ -1407,6 +1445,7 @@ export function createWorkspace() {
     newReport,
     editReport: () => navigate('editor'),
     reportList: () => navigate('reports'),
+    deleteReport,
     openReport,
     saveReport,
     replaceConflict,
@@ -1580,7 +1619,8 @@ export function createWorkspace() {
     const el = e.target.closest('[data-action],[data-nav],[data-question],[data-doc],[data-tab]');
     if (!el || el.disabled) return;
     if (el.dataset.nav) {
-      navigate(el.dataset.nav);
+      if (el.dataset.nav === 'chat') actions.newQuestion();
+      else navigate(el.dataset.nav);
       return;
     }
     if (el.dataset.doc) {

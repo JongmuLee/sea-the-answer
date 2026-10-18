@@ -56,6 +56,7 @@
 | GET/POST `/api/reports/current` | 열람 권한 | 이전 공용 초안 ID 호환 경로 |
 | POST `/api/reports/generate` | 모두 | `{template:"noon"|"mrv", ship, from, to}` |
 | POST `/api/reports/submit` | 소유자·관리자 | `{id, version}` 검토 요청 |
+| POST `/api/reports/delete` | 관리자 | `{id, version}` 저장된 보고서 삭제 |
 | POST `/api/tools/calculate_emissions` | 모두 | `{fuel, factor, dwt, distance}` |
 | POST `/api/tools/voyage_time` | 모두 | `{start, end, before, after}` UTC 시간 계산 |
 | GET/POST `/api/backups` | 관리자 | 백업 목록 / 생성 |
@@ -177,3 +178,13 @@ CLI 일괄 수집 명령은 제거되었습니다(Node 버전의 `npm run ingest
 
 - 백업은 SHA-256 체크섬으로 우발적 손상만 검사하며, 서명 기반 진위 확인은 하지 않습니다. 가져오기는 형식 v2만 허용합니다.
 - 목록 API는 페이징 없이 전체를 반환합니다(캡스톤 데모 규모).
+
+### 보고서 삭제 (2026-10-18)
+
+`POST /api/reports/delete`는 관리자만 호출한다. `{id: string, version: 양의 정수}`를 받고 `{ok: true, id}`를 반환한다. 모든 POST의 기존 CSRF·사용자 식별·복구 중 요청 차단을 적용한다.
+
+- 보고서 행을 잠그고, 없으면 404 `NOT_FOUND`, 버전이 바뀌었으면 409 `VERSION_CONFLICT`로 거부한다.
+- 작성 중·검토 중·승인됨 상태 모두 관리자가 삭제할 수 있다. `report_meta`와 `reports`의 해당 행을 같은 트랜잭션에서 삭제한다. DB 스키마 변경은 없다.
+- 해당 보고서의 대기 중 검토 요청은 기존 `rejected` 상태와 ‘보고서 삭제로 검토 요청 종료’ 사유로 마감한다. 기존 승인·반려 이력과 근거 문서·운항 기록은 보존하며 감사 로그에 보고서 삭제를 남긴다.
+- 검토 승인·반려도 같은 보고서 행을 먼저 잠그고 대기 상태를 다시 확인하여 삭제와 경합할 때 이미 종료된 요청을 처리하지 않는다.
+- 화면은 삭제 성공 후 해당 보고서의 임시 초안을 비우고 목록으로 이동한다. 실패 시 편집 내용과 오류 안내를 유지한다.

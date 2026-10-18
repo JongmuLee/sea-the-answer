@@ -32,7 +32,7 @@ export function createExtendedViews(model, views) {
           <small>{'선박 운항 업무지원'}</small>
         </section>
         <section className={'login-card'}>
-          <span className={'eyebrow'}>{'HAEDAP WORKSPACE'}</span>
+          <span className={'eyebrow'}>{'SEA THE ANSWER WORKSPACE'}</span>
           <h2>{'관리자 로그인'}</h2>
           <p className={'muted mb'}>
             {'관리 기능을 사용하려면 로그인해 주세요.'}
