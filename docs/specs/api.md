@@ -37,6 +37,8 @@
 | 메서드 · 경로 | 권한 | 동작 |
 |---|---|---|
 | GET `/api/health` | 모두 | 상태·사용자·CSRF 토큰 |
+| GET `/api/skills` | 모두 | 고정 업무 스킬 목록 |
+| POST `/api/skills/run` | 모두(본인 이력·문서 권한 검사) | [업무 스킬](workflow-skills.md). 입력 범위·매핑 검증 후 실행, 초안 저장은 별도 |
 | POST `/api/auth/login` · `/api/auth/logout` | 모두 | 관리자 로그인·로그아웃 |
 | GET `/api/documents` | 모두 | 허용 문서 목록·메타데이터·페이지별 본문 |
 | GET `/api/documents/:id/pdf` | 모두(범위 검사) | 허용된 저장 원본 PDF |
@@ -92,6 +94,7 @@ DB의 READ ONLY 트랜잭션에서 기존 `DocumentStore.search_candidates`를 �
 2026-10-14 확정: `POST /api/search`의 `{question, filter}` 및 `{evidence: [...]}`, `/api/ask`의 evidence 형식은 유지한다. 질문은 기존처럼 비어 있지 않은 최대 2,000자 문자열이며 `filter`는 `all|imo|manual`이다. `GET /api/health.retrieval`은 `bm25-ko-en`을 반환한다.
 
 - `DocumentStore.search`가 PostgreSQL에서 현재 개정(`active=true`) 청크를 읽고, 문서 상태·사용자 scope·종류 필터를 적용한 뒤에만 검색 모듈에 전달한다. 제한된 청크는 BM25 통계에도 포함하지 않는다.
+- 업무 스킬의 선택 문서 검색은 `document_ids`의 활성·열람 권한을 검증하고 SQL에서 해당 ID로 후보를 제한한 뒤 같은 BM25를 적용한다. 선택하지 않은 문서는 BM25 통계에도 포함하지 않는다. CLI의 기본 전체 후보 조회도 공통 `search_candidates`를 사용한다.
 - `api/rag_retrieval.py`의 `retrieve(query, chunks, top_k=5)`는 원본 청크 필드와 숫자 `score`를 가진 사본 목록을 반환한다. `DocumentStore`는 내부 점수만 제거하여 기존 API 응답을 유지한다. 문서 ID·제목·페이지·heading·본문은 변경하지 않는다.
 - corpus는 `title`, `reference`, `heading`, `text`를 같은 비중으로 결합한다. Unicode NFKC 정규화·소문자화 후 기존 정규식의 2자 이상 영숫자·한글 단어를 추출하고 한글 3자 이상 단어에는 겹치는 2글자 토큰을 추가한다. 원문은 정규화하지 않고 검색용 사본에만 적용한다.
 - 질의의 서로 다른 기본 단어는 최대 30개이며 기존 한영 동의어를 확장한다. 단어와 확장어 모두 동일하게 토큰화하고 질의 토큰을 중복 제거한다. corpus의 반복 토큰은 BM25 빈도 계산을 위해 유지한다.

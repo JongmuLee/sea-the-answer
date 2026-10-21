@@ -100,6 +100,9 @@ def test_legacy_same_hash_keeps_existing_chunks(database):
 
 
 def test_bm25_api_ranking_filters_and_original_citations(database):
+    # This rollback-only schema's ranking fixture owns its corpus. Bundled
+    # knowledge can legitimately contain "ballast" and grow between releases.
+    database.run("UPDATE documents SET active=false")
     documents = []
     for name, content in [
         ("broad", "ballast inspection 평형수 검사 " + "navigation 항로 기록 " * 25),

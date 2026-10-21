@@ -28,12 +28,17 @@ def allowed_hosts() -> set[str]:
     return hosts
 
 
+MINDLOGIC_GATEWAY_HOST = "factchat-cloud.mindlogic.ai"
+
+
 @dataclass(frozen=True)
 class LLMSettings:
     base_url: str
     model: str
     api_key: str = field(repr=False)
     response_format: str = "text"
+    # Path appended to base_url; Mindlogic's documented gateway route ends with "/".
+    completions_path: str = "/chat/completions"
 
 
 def llm_settings() -> LLMSettings | None:
@@ -55,16 +60,21 @@ def llm_settings() -> LLMSettings | None:
     # Select credentials only after parsing the destination; paths and lookalike
     # hostnames must never cause a provider's secret to reach another server.
     hostname = url.host.lower().rstrip(".")
+    completions_path = "/chat/completions"
     if hostname == "api.openai.com":
         key_name = "OPENAI_API_KEY"
     elif hostname == "dongguk.edu" or hostname.endswith(".dongguk.edu"):
         key_name = "DONGUK_AI_CHAT_API_KEY"
+    elif hostname == MINDLOGIC_GATEWAY_HOST:
+        # Dongguk AI Chat's API gateway is operated by Mindlogic (ADR 0014). Exact host only.
+        key_name = "DONGUK_AI_CHAT_API_KEY"
+        completions_path = "/chat/completions/"
     else:
         key_name = None
     key = (os.getenv(key_name) or "").strip() if key_name else ""
     if key_name and not key:
         return None
-    return LLMSettings(str(url).rstrip("/"), model, key, output_format)
+    return LLMSettings(str(url).rstrip("/"), model, key, output_format, completions_path)
 
 
 def llm_configured() -> bool:

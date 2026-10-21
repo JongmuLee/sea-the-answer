@@ -134,22 +134,31 @@ class DocumentStore:
         self.run("UPDATE documents SET active=false WHERE logical_id=%s", (row["logical_id"],))
         return {"id": doc_id}
 
-    def search(self, user: dict, question: str, kind: str = "all") -> list[dict]:
+    def search(self, user: dict, question: str, kind: str = "all", document_ids: list[str] | None = None) -> list[dict]:
         text(question, "질문", 2000)
-        candidates = self.search_candidates(user, kind)
+        candidates = self.search_candidates(user, kind, document_ids)
         # Filter before BM25 so inaccessible chunks cannot affect IDF/ranking.
         # Keep scores internal; /search and /ask retain their evidence contract.
         return [{key: value for key, value in row.items() if key != "score"}
                 for row in retrieve(question, candidates, top_k=5)]
 
-    def search_candidates(self, user: dict, kind: str = "all") -> list[dict]:
+    def search_candidates(self, user: dict, kind: str = "all", document_ids: list[str] | None = None) -> list[dict]:
         """Shared read-only candidate selection for API search and diagnostics."""
         require(kind in ("all", "imo", "manual"), "문서 필터가 올바르지 않습니다.")
-        rows = self.all("""SELECT c.id,c.document_id,c.heading,c.text,p.page,d.title,d.kind,d.url,
+        if document_ids is not None:
+            require(isinstance(document_ids, list) and 0 < len(document_ids) <= 20
+                    and all(isinstance(i, str) and 0 < len(i) <= 200 for i in document_ids)
+                    and len(set(document_ids)) == len(document_ids), "선택 문서를 확인해 주세요.")
+            allowed = set(self.allowed_document_ids(user))
+            require(set(document_ids) <= allowed, "선택 문서를 사용할 수 없습니다. 문서 상태와 열람 권한을 확인해 주세요.",
+                    "DOCUMENT_SCOPE_UNAVAILABLE", 403)
+        scope_sql = " AND d.id = ANY(%s)" if document_ids is not None else ""
+        sql = """SELECT c.id,c.document_id,c.heading,c.text,p.page,d.title,d.kind,d.url,
             d.reference,d.version,d.reviewed_at,d.hash,m.body AS meta
             FROM chunks c JOIN documents d ON d.id=c.document_id
             LEFT JOIN chunk_pages p ON p.id=c.id LEFT JOIN document_meta m ON m.id=d.id
-            WHERE d.active=true ORDER BY d.id,c.position""")
+            WHERE d.active=true""" + scope_sql + " ORDER BY d.id,c.position"
+        rows = self.all(sql, (document_ids,)) if document_ids is not None else self.all(sql)
         candidates = []
         for row in rows:
             meta = row["meta"] or {"scope": "all", "status": "active"}

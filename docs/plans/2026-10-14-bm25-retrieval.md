@@ -56,5 +56,7 @@ PostgreSQL에 저장된 청크의 단어 포함 개수 검색을 rank-bm25의 BM
 
 ## 7. 진행 기록
 
+- 2026-10-21: 팀 `main` `0257175`를 `feature/rag-bm25`에 통합. 새 선택 문서 검색의 권한·SQL 범위 제한을 공통 후보 조회에 보존하고 BM25/CLI를 유지했다. 전체 backend 399 passed / 4 skipped, frontend 4 passed, Docker 운영 빌드 및 E2E 1 passed. 상세는 [검증 기록](../changelog.md#2026-10-21--최신-main과-bm25-통합).
+
 - 2026-10-14: 구현 범위·권한 경계·API 호환 계획 확인.
 - 2026-10-14: 구현 완료. 격리 PostgreSQL 포함 backend 315 passed / 4 skipped(기존 적재 데이터셋 필요), frontend 4 passed, Docker Chromium E2E 1 passed. 테스트용 DB 서버·컨테이너 종료. 명령·한계는 [검증 기록](../changelog.md#2026-10-14--bm25-문서-검색)에 기록했다.

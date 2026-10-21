@@ -1,12 +1,13 @@
 # 해답 — SEA THE ANSWER
 
-현재 버전 **1.4.0** · 마지막 업데이트 **2026-10-14**
+현재 버전 **1.4.0** · 마지막 업데이트 **2026-10-15**
 
 선내 문서 근거와 운항 기록을 함께 보여 주는 선박 업무 지원 앱입니다. 화면은 Next.js, `/api/*`는 Python FastAPI, 저장소는 PostgreSQL이며, 저장소 최상위에서 `docker compose` 하나로 셋을 함께 실행합니다.
 
 | 화면 | 기능 |
 |---|---|
 | 통합 질문 | 문서 근거 + 선택한 선박·기간의 운항 수치·추이를 함께 답변, 근거 페이지·원문 PDF 열기, 입력 기준 비교, 보고서에 담기 |
+| 업무 스킬 | MRV 참고 분석·선택 문서 답변·운항 요약·보고서 초안·점검표·내 응답 평가. 기본 동작은 LLM 불필요 |
 | 문서 | 텍스트 PDF 등록·추출 검토, 메타데이터·열람 범위, 개정 버전 관리 |
 | 운항 정보 | 선박·일별 기록 관리, CSV 일괄 등록, 지표 차트·선박 비교, 배출량·항해 시간 계산 |
 | 보고서 | Noon / MRV 검토 초안 자동 생성, 편집·저장, 검토 요청 → 관리자 승인 |
@@ -36,7 +37,7 @@ sea-the-answer/
 │  ├─ pyproject.toml, uv.lock, .python-version, Dockerfile
 │  ├─ api/               FastAPI 앱 — main.py(진입점), web/(보안·동시성), routes/(도메인별 경로), store/(DB·업무 로직)
 │  ├─ tools/ (선택) 해사 데이터 조회·계산 Tool (서비스 런타임)
-│  ├─ knowledge/         seed.json(기본 문서), sample-data.json(가상 운항 예시)
+│  ├─ knowledge/         seed.json(기본 문서), documents/(기본 문서 원본 PDF), sample-data.json(가상 운항 예시)
 │  └─ tests/             pytest
 ├─ migrations/           DB 스키마 마이그레이션 (SQL, up/down)                        [dbmate]
 ├─ scripts/ 오프라인 자료 준비·적재·선박 매핑, 읽기 전용 BM25 진단 (backend uv 환경)
@@ -181,7 +182,7 @@ DB 연결 실패 시 실행 중인 Compose 프로젝트·DB 상태 및 `DATABASE
 | `HAEDAP_ALLOWED_HOSTS` | (비움) | localhost 외에 접속에 쓰는 호스트 이름·IP(쉼표 구분) |
 | `OPENAI_MODEL` | (비움) | 모델 서버의 정확한 모델 ID. 비우면 모델 답변 비활성 |
 | `OPENAI_API_KEY` | (비움) | `api.openai.com`의 OpenAI 서버에만 전송. 해당 호스트에서 필수 |
-| `DONGUK_AI_CHAT_API_KEY` | (비움) | `dongguk.edu` 또는 하위 도메인의 동국 서버에만 전송. 해당 호스트에서 필수 |
+| `DONGUK_AI_CHAT_API_KEY` | (비움) | `dongguk.edu`·하위 도메인 또는 동국 AI Chat 게이트웨이 `factchat-cloud.mindlogic.ai`에만 전송. 해당 호스트에서 필수 |
 | `LLM_API_BASE_URL` | `https://api.openai.com/v1` | OpenAI 호환 API 접두 주소. `/chat/completions`는 앱에서 붙임. backend에만 전달 |
 | `LLM_RESPONSE_FORMAT` | `text` | 기본은 JSON 출력 지시와 앱 내부 검증. 지원 서버·모델에서 `json_object` 또는 `json_schema` 선택 |
 | `MARITIME_DATA_API_TOKEN`, `MARITIME_DATA_DATABASE_URL` | (비움) | 해사 데이터 Tool 라우트(`/api/maritime-data/*`) 활성화 |

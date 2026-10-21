@@ -1,5 +1,7 @@
 # adr — 설계 결정 기록 (Architecture Decision Records)
 
+- [0015 업무 스킬과 선택 LLM](0015-optional-model-workflow-skills.md): 고정 서버 실행기와 런타임 지침 · 채택 · 2026-10-15.
+
 나중에 바꾸기 어려운 선택을 **왜** 그렇게 했는지 남깁니다. 새로 합류한 사람이나 에이전트가 "이건 왜 이렇게 되어 있지?"라는 질문에 답을 찾는 곳이고, 같은 논의를 반복하지 않게 해 줍니다.
 
 추가 제안: [0013 - 제원 후보 별도 보존·MRV 참고 집약도 API](0013-mrv-reference-intensity.md) · 2026-10-13. 팀 PR #11의 0012와 번호를 구분합니다.
@@ -36,5 +38,6 @@
 | [0011](0011-tools-runtime-and-data-preparation.md) | 해사 runtime·준비 작업 분리와 공통 마이그레이션·명시적 선박 연결 | 제안 | 2026-10-13 |
 | [0012](0012-openai-compatible-chat-completions.md) | OpenAI 호환 Chat Completions 공통 호출과 로컬 인용 검증 | 대체됨(0013) | 2026-10-13 |
 | [0013](0013-provider-credential-isolation.md) | 공통 LLM 설정과 URL 호스트에 따른 공급자별 인증키 격리 | 채택 | 2026-10-14 |
+| [0014](0014-mindlogic-gateway-host.md) | 동국 AI Chat API 게이트웨이(Mindlogic) 호스트 계약 추가 | 제안 | 2026-10-14 |
 
 0002~0004는 이미 구현된 결정을 2026-10-08에 소급 기록한 것입니다. 날짜는 해당 결정이 들어간 버전의 날짜입니다.

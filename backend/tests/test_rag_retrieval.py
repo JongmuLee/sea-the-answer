@@ -133,3 +133,36 @@ def test_store_keeps_existing_question_and_filter_validation():
     for query, kind in [("", "all"), ("x" * 2001, "all"), ("fuel", "invalid")]:
         with pytest.raises(ApiError):
             store.search({"role": "guest"}, query, kind)
+
+
+def test_selected_documents_are_sql_filtered_before_bm25(monkeypatch):
+    selected = chunk("selected", "ballast")
+    store = DocumentStore()
+    store.allowed_document_ids = lambda user: [selected["document_id"], "doc-other"]
+    seen = []
+
+    def read(sql, params):
+        assert "WHERE d.active=true AND d.id = ANY(%s)" in sql
+        assert params == ([selected["document_id"]],)
+        return [selected]
+
+    def scoped_retrieve(query, candidates, top_k):
+        seen.extend(c["document_id"] for c in candidates)
+        return retrieve(query, candidates, top_k)
+
+    store.all = read
+    monkeypatch.setattr("api.store.documents.retrieve", scoped_retrieve)
+    results = store.search({"role": "guest"}, "ballast", document_ids=[selected["document_id"]])
+    assert seen == [selected["document_id"]]
+    assert results[0]["id"] == selected["id"] and "score" not in results[0]
+
+
+@pytest.mark.parametrize("document_ids", [[], ["doc-a", "doc-a"], [""], [1], "doc-a",
+    [str(i) for i in range(21)], ["inaccessible"]])
+def test_invalid_or_inaccessible_selection_never_reaches_sql_or_bm25(monkeypatch, document_ids):
+    store = DocumentStore()
+    store.allowed_document_ids = lambda user: ["doc-a"]
+    store.all = lambda *args: pytest.fail("Invalid selection reached SQL")
+    monkeypatch.setattr("api.store.documents.retrieve", lambda *a, **k: pytest.fail("Invalid selection reached BM25"))
+    with pytest.raises(ApiError):
+        store.search({"role": "guest"}, "ballast", document_ids=document_ids)

@@ -1812,6 +1812,11 @@ export function createWorkspace() {
     state,
     views,
     api,
+    acceptSavedReport(report, userId) {
+      if (state.user?.id !== userId) return;
+      state.reports = [report, ...state.reports.filter((item) => item.id !== report.id)];
+      render();
+    },
     get revision() {
       return revision;
     },
@@ -1855,7 +1860,9 @@ export function createWorkspace() {
       onClick: handleClick,
       onInput: (e) => {
         handleInput(e);
-        render();
+        // data-field controls (selects, dates) are stored by the change handler. Re-rendering
+        // here would make React restore the old controlled value before "change" reads it.
+        if (!e.target.dataset?.field) render();
       },
       onChange: (e) => {
         handleChange(e);
