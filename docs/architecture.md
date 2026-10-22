@@ -116,6 +116,7 @@ sequenceDiagram
 | `api/llm.py` | Chat Completions 호출, 선택적 JSON 출력 형식, 모델 JSON·원문 인용 검증. URL 호스트별 키 선택과 설정 판정은 `config.llm_settings()`를 health·답변이 공유 |
 | `api/rag_preprocessing.py` | 저장 전 페이지별 텍스트 정리·경계 기반 최대 900자 청킹. DB·웹 의존성 없음 |
 | `api/rag_retrieval.py` | 허용된 청크의 제목·출처·heading·본문을 토큰화해 BM25 정렬. 내부 score는 저장 계층에서 제거해 기존 evidence 응답 유지 |
+| `api/rag_vocabulary.py` | Kiwi 해사 사용자 단어, 한영 별칭, 제한적인 불용어. 검색용 사전이며 원문은 변경하지 않음 |
 | `api/errors.py`, `api/validation.py` | `ApiError`·`require`, 입력 검증·형식 도우미 |
 | `knowledge/seed.json`, `knowledge/documents/`, `knowledge/sample-data.json` | 기본 문서와 그 원본 PDF(`file` 필드로 연결), "예시 데이터 넣기"용 가상 운항 기록 |
 | `tools/` | 서비스 실행 중 사용하는 읽기 전용 해사 데이터 조회·계산·규칙 기반 조회 도우미(8절) |
@@ -174,7 +175,7 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 ## 7. 알려진 한계
 
 - 문서 청크를 요청마다 읽고 권한 필터 후 메모리 BM25 인덱스를 만드는 캡스톤 데모 규모 설계. 대규모 운영에는 인덱스 재사용·페이징·파일 저장소·TLS·로그 보존 정책이 필요.
-- 검색은 한영 단어·한글 2글자 토큰·제한된 동의어 기반이다. 형태소·영문 stemming·의미 검색은 없고, 한글 부분 토큰은 오탐할 수 있다. 작은 corpus의 BM25 점수는 0 또는 음수일 수 있으며 확률이 아니다. 상세 규칙은 [검색 계약](specs/api.md#문서-검색-bm25)을 따른다.
+- 검색은 Kiwi 한국어 형태소·영숫자·제한된 해사 별칭·불용어 기반이다. 한글 bigram은 제거했다. 분석기만 프로세스 단위로 재사용하며 corpus는 요청마다 분석하므로 첫 모델 초기화와 큰 corpus에서 지연이 있을 수 있다. 사전 밖 용어·다의어·영문 활용형·의미 검색에는 한계가 있다. 작은 corpus의 BM25 점수는 0 또는 음수일 수 있으며 확률이 아니다. 상세 규칙은 [검색 계약](specs/api.md#문서-검색-bm25)을 따른다.
 - 관리자 세션은 backend 프로세스 메모리에 있어 backend를 여러 개 띄우면 공유되지 않음.
 - 질문 유형 분기는 단어 규칙 기반. 질문 속 날짜·선박명 자동 추출은 미구현.
 

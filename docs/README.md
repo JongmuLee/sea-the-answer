@@ -39,6 +39,8 @@
 
 ### plans — 작업 계획
 
+- [목차 청킹과 Kiwi BM25 개선](plans/2026-10-22-rag-chunking-kiwi.md): 완료.
+
 - [앱 업무 스킬 구현](plans/2026-10-15-app-workflow-skills.md): 진행 상태와 실제 검증.
 
 | 문서 | 상태 |

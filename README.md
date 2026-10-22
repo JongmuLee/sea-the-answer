@@ -123,7 +123,9 @@ docker compose run --rm migrate rollback             # 마지막 파일 되돌�
 
 ## 테스트
 
-BM25 검색은 backend의 `rank-bm25` 의존성을 사용합니다. Docker에서는 `docker compose up --build -d`로 반영하고, 직접 실행할 때는 `backend/`에서 `uv sync` 후 백엔드를 재시작하세요. 이미 저장한 문서를 재등록하거나 DB를 변경할 필요는 없습니다. DB 없는 검색 단위 테스트는 `backend/`에서 `uv run pytest tests/test_rag_retrieval.py -q`로 실행합니다. 알고리즘·한계는 [검색 계약](docs/specs/api.md#문서-검색-bm25)에 있습니다.
+BM25 검색은 backend의 `rank-bm25`와 한국어 형태소 분석기 `kiwipiepy`를 사용합니다. Docker에서는 `docker compose up --build -d`로 반영하고, 직접 실행할 때는 `backend/`에서 `uv sync` 후 백엔드를 재시작하세요. Kiwi 모델은 의존성 설치에 포함되며 별도 API 키가 필요하지 않습니다. 첫 검색은 모델·별칭 초기화로 늦을 수 있습니다. 검색 개선은 기존 청크에도 적용됩니다. DB 없는 회귀 테스트는 `backend/`에서 `uv run pytest tests/test_rag_preprocessing.py tests/test_rag_retrieval.py tests/test_debug_bm25.py -q`로 실행합니다. 알고리즘·한계는 [검색 계약](docs/specs/api.md#문서-검색-bm25)에 있습니다.
+
+목차 항목 묶음과 연속 제목 청킹 개선은 새 문서·새 내용의 개정에 적용됩니다. **기존 DB 청크는 자동으로 바뀌지 않으며, 같은 입력을 다시 저장해도 `unchanged`이면 재청킹하지 않습니다.** 확인하려면 원본 PDF를 새 테스트 문서로 등록하세요. 기존 문서 수정 화면에서 가져온 sections는 저장된 청크이므로 원본 페이지 추출본으로 간주하면 안 됩니다. 기존 문서 전체의 재색인은 별도 작업입니다.
 
 | 범위 | 위치 | 명령 |
 |---|---|---|
@@ -138,7 +140,7 @@ docker compose --profile e2e down                                               
 
 e2e는 앱과 분리된 테스트 스택(`e2e-db`·`e2e-migrate`·`e2e-backend`·`e2e-frontend`)을 띄웁니다. DB는 메모리(tmpfs)에 있어 앱 데이터에 영향이 없고, 호스트에 포트를 열지 않으므로 앱이 실행 중이어도 됩니다. 실패 시 스크린샷·trace는 `e2e/test-results/`, HTML 보고서는 `e2e/playwright-report/`에 생깁니다.
 
-- **`--force-recreate`를 빼지 마세요.** 테스트가 끝나도 Compose는 `e2e` 컨테이너만 멈추고 의존 서비스(`e2e-db` 등)는 계속 실행합니다. 이 옵션이 있어야 다음 실행 때 컨테이너를 새로 만들어 빈 DB에서 시작합니다(없으면 이전 데이터가 남아 "예시 데이터 넣기" 단계에서 실패).
+- **종료 후 `down` 정리를 빠뜨리지 마세요.** 테스트가 끝나도 Compose는 `e2e` 컨테이너만 멈추고 의존 서비스(`e2e-db` 등)는 계속 실행합니다. `--force-recreate`만으로 의존 DB까지 재생성되지 않는 환경이 확인됐습니다. 이전 테스트 스택을 정리한 후 실행해야 빈 DB가 보장됩니다. 앱을 켜 둔 채 테스트하려면 위 `up`과 `down` 명령 모두 `docker compose -p haedap-e2e-check --profile e2e ...`처럼 별도 프로젝트 이름을 사용하세요.
 - 의존 서비스까지 자동으로 멈추는 Compose 옵션은 없어서, 끝나면 `down`으로 정리합니다. `--attach-dependencies`는 쓰지 마세요. `e2e-migrate`가 끝나는 순간 중단되어 **테스트를 돌리지 않고도 종료 코드 0**이 나옵니다(2026-10-13 확인).
 
 Docker 없이 e2e를 돌리려면 **빈 DB로 띄운 스택**에 대고 `e2e/`에서 `npm ci`, `npx playwright install chromium`, `npx playwright test`를 실행합니다(주소는 `E2E_BASE_URL`, 기본 `http://127.0.0.1:5173`). 시나리오가 예시 데이터를 넣고 건수를 확인하므로 데이터가 있는 DB에서는 실패합니다.
@@ -159,7 +161,7 @@ docker compose run --rm --no-deps -T -v "${PWD}/scripts:/app/scripts:ro" backend
 - 기본은 guest(공개 문서)입니다. 관리자로 로그인한 화면과 비교하려면 `--username admin`처럼 **기존 활성 계정**을 지정합니다. 이는 DB 접근 권한을 가진 개발자의 열람 범위 시뮬레이션이며 웹 로그인 대체 기능이 아닙니다.
 - `--kind all|imo|manual`: 기존 UI 종류 필터. 기본 `all`.
 - `--preview-chars 0`: 본문 출력 생략. 기본 240자. `--json`: 기계가 읽을 수 있는 JSON 출력.
-- 일치 토큰은 본문만이 아니라 **제목·참조명·heading·본문 전체**의 토큰 교집합입니다. 동의어·한글 2글자 토큰도 포함되며 **토큰별 점수 기여도가 아닙니다**.
+- 일치 토큰은 본문만이 아니라 **제목·참조명·heading·본문 전체**의 토큰 교집합입니다. Kiwi 형태소·해사 별칭 확장을 반영하며 **토큰별 점수 기여도가 아닙니다**.
 - 점수는 기존 BM25의 최종 합산값입니다. 작은 corpus에서는 0·음수도 정상이며, 문서 필터를 쓰면 corpus 통계가 달라져 전체 검색과 점수가 달라집니다. 일치 결과가 없으면 `No matching chunks`를 표시합니다.
 - 출력에 문서 내용이 포함될 수 있으므로 공유·로그 저장 전에 확인하세요. 이 도구 자체는 결과 파일을 저장하지 않습니다.
 

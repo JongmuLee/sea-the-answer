@@ -4,20 +4,25 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
+from threading import Lock
 
+from kiwipiepy import Kiwi
 from rank_bm25 import BM25Okapi
 
+from .rag_vocabulary import KOREAN_TERMS, SEARCH_SYNONYMS, STOPWORDS
 
-SEARCH_SYNONYMS = (
-    ("fuel", "연료"), ("emission", "emissions", "배출량"),
-    ("report", "보고서"), ("cii", "탄소집약도", "carbon intensity"),
-    ("eca", "배출규제해역"), ("sulphur", "sulfur", "sox", "황함유량"),
-    ("rating", "등급"), ("corrective", "시정", "개선"),
-    ("changeover", "전환"), ("checklist", "점검표"),
-)
-_WORDS = re.compile(r"[a-z0-9]{2,}|[가-힣]{2,}")
-_KOREAN = re.compile(r"[가-힣]{3,}\Z")
+_PARTS = re.compile(r"[가-힣]+(?:\s+[가-힣]+)*|[a-z]+[a-z0-9]*|\d+(?:\.\d+)*[a-z]?")
 _SEARCH_FIELDS = ("title", "reference", "heading", "text")
+_KIWI_LOCK = Lock()
+
+
+@lru_cache(maxsize=1)
+def _kiwi() -> Kiwi:
+    analyzer = Kiwi(num_workers=1, model_type="cong")
+    for word in KOREAN_TERMS:
+        analyzer.add_user_word(word, "NNP")
+    return analyzer
 
 
 def _normalize(value: str) -> str:
@@ -25,28 +30,43 @@ def _normalize(value: str) -> str:
 
 
 def tokenize(value: str) -> list[str]:
-    """Keep word frequency; supplement Korean words with overlapping bigrams.
-
-    This is deliberately not a morphological analyzer or English stemmer.
-    Search normalization never changes stored text or citation offsets.
-    """
+    """Shared query/corpus morphology, preserving frequency and numeric labels."""
     tokens = []
-    for word in _WORDS.findall(_normalize(value)):
-        tokens.append(word)
-        if _KOREAN.fullmatch(word):
-            tokens.extend(word[i:i + 2] for i in range(len(word) - 1))
-    return tokens
+    for part in _PARTS.findall(_normalize(value)):
+        if not ("가" <= part[0] <= "힣"):
+            tokens.append(part)
+            continue
+        # Only the analyzer/dictionary is shared; no document text or index is
+        # cached. Lock also prevents duplicate lazy initialization on requests.
+        with _KIWI_LOCK:
+            morphemes = _kiwi().tokenize(part)
+        for token in morphemes:
+            tag = token.tag.split("-")[0]
+            if tag in {"NNG", "NNP", "NR", "VV", "VA", "MAG", "XR"} or token.form == "않":
+                tokens.append(token.form)
+    return [t for t in tokens if t not in STOPWORDS]
+
+
+@lru_cache(maxsize=1)
+def _alias_groups() -> tuple:
+    return tuple(tuple(tuple(tokenize(alias)) for alias in group) for group in SEARCH_SYNONYMS)
+
+
+def _contains_phrase(tokens: list[str], phrase: tuple[str, ...]) -> bool:
+    return bool(phrase) and any(tuple(tokens[i:i + len(phrase)]) == phrase
+                               for i in range(len(tokens) - len(phrase) + 1))
 
 
 def query_tokens(query: str) -> list[str]:
     """Actual deduplicated query tokens, including the existing expansion."""
-    normalized = _normalize(query)
-    words = list(dict.fromkeys(_WORDS.findall(normalized)))[:30]
-    for group in SEARCH_SYNONYMS:
-        # Preserve the existing bilingual expansion, including Korean suffixes.
-        if any(word in normalized for word in group):
-            words.extend(group)
-    return list(dict.fromkeys(tokenize(" ".join(words))))
+    words = tokenize(query)[:30]
+    expanded = list(words)
+    for group in _alias_groups():
+        # Match token/phrase boundaries against the ORIGINAL query only: no
+        # substring hits (fuel in refuelling) or cascading synonym expansion.
+        if any(_contains_phrase(words, phrase) for phrase in group):
+            expanded.extend(token for phrase in group for token in phrase)
+    return list(dict.fromkeys(expanded))
 
 
 def chunk_tokens(chunk: dict) -> list[str]:

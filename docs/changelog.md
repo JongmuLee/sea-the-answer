@@ -4,6 +4,8 @@
 
 ## 변경 이력
 
+- **목차 청킹·Kiwi BM25 / 2026-10-22** (1.4.0 유지): 목차 항목의 줄바꿈 제목·쪽번호를 묶고 목차 heading 승격을 억제한다. 연속된 짧은 상위·하위 제목은 설명과 함께 청킹한다. 한글 bigram을 Kiwi 형태소 분석으로 교체하고 `api/rag_vocabulary.py`에 해사 사용자 사전·한영 별칭·제한적 불용어를 분리했다. 질의와 corpus가 같은 토큰화를 사용하며 조사·어미를 제외하고 부정어·숫자·단위를 보존한다. 사용자 설치 Kiwi 의존성을 그대로 사용한다. 저장/hash/개정/권한/API/UI는 변경하지 않았고 기존 DB 재청킹·벡터·RRF는 수행하지 않았다. [계획](plans/2026-10-22-rag-chunking-kiwi.md).
+
 - **RAG 브랜치 최신 팀 main 통합 / 2026-10-21**: 로컬 `main`을 `upstream/main`의 `0257175`로 fast-forward하고 `feature/rag-bm25`에 병합했다. 문서 검색·변경 이력 충돌을 해결해 팀의 선택 문서 ID 검증·SQL 범위 제한과 기존 BM25·디버그 CLI를 함께 보존했다. 선택하지 않은 문서는 BM25 통계에 포함하지 않는다. 기본 용어집 확충에 영향을 받던 합성 순위 테스트는 롤백 전용 테스트 스키마 안에서 corpus를 격리했다. 사용자 Kiwi 의존성 변경은 별도 미커밋 변경으로 보존하며 실제 앱 DB·`.env`·사용자 PDF는 수정하지 않는다.
 
 - **BM25 개발자 진단 / 2026-10-15** (1.4.0 유지): `scripts/debug_bm25.py`에서 기존 PostgreSQL 청크를 읽어 질의 토큰·Top-K·전체 점수·일치 토큰·출처·미리보기를 출력한다. 문서 ID/제목·kind·활성 사용자 범위·JSON 옵션을 지원한다. 기존 토큰 함수와 후보 조회를 공유하고 DB는 READ ONLY로 연결한다. 랭킹·API 응답·저장·청킹·UI·스키마·의존성 변경 없음. 토큰별 기여도와 검색 품질 개선은 제외했다. [계획](plans/2026-10-15-bm25-debug.md), [실행](../README.md#bm25-개발자-디버그).
@@ -61,6 +63,15 @@
 - **1.2.0 / 2026-09-30**: PDF/CSV, 다중 보고서, 통합 결과, 계정·권한·로그·백업·복구.
 
 ## 검증 기록
+
+### 2026-10-22 — 목차 청킹·Kiwi 검증
+
+- Windows Python 3.13, Kiwi 0.24.0, 별도 임시 PostgreSQL 17에서 `backend/` 기준 `uv run python ../.verification/bm25-db-tests.py` 실행: **415 passed / 4 skipped**, 90.10초. helper는 `.env` 없이 임시 서버/테스트 DB에서 `python -m pytest -q -rs --tb=short`를 실행하고 종료했다. skip 4개는 기존 해사 데이터셋을 요구하는 `MARITIME_DATA_TEST_DATABASE_URL` 미설정이며 이번 검색·청킹 테스트는 모두 실행했다. 기존 Starlette/httpx 경고 1개.
+- DB 없는 표적 테스트: `uv run pytest tests/test_rag_preprocessing.py tests/test_rag_retrieval.py tests/test_debug_bm25.py -q` → **95 passed**, 2.66초. 합성 목차·연속 제목·본문 문자 보존·길이/페이지·한국어 형태소·한영 용어·부정어·숫자·불용어·기존 권한/CLI 계약을 검증했다.
+- 기존 로컬 PDF.js 추출 검토 자료를 사용해 Part 5D의 1~10쪽을 HEAD의 이전 전처리와 비교했다(새 PDF 추출/실제 앱 DB 저장 아님). 공백을 제외한 본문 문자가 동일하고 900자·물리 페이지 제한을 지킨다. 3쪽 목차 25개, 8쪽 목차 34개 항목이 분리되지 않고 base heading을 유지한다. 8쪽 5→4청크, 9쪽 8→6청크이며 9쪽 제목만 있는 청크는 2→0개. 원문 파일/본문은 Git에 추가하지 않았다.
+- 목차 판별은 규칙 기반이므로 점선 없는 목차, 본문과 혼합된 목차에는 제한이 있다. 한 항목이 900자를 넘거나 제목과 설명이 서로 다른 페이지에 있으면 길이·페이지 보존을 우선한다. 표 열 구조·로마숫자 꼬리말 개선은 이번 범위 밖이다. 전체 실제 질의에 대한 Recall@5 향상을 측정한 것은 아니다.
+- Docker 운영 이미지에서 Kiwi 설치와 frontend production 빌드 성공. 첫 E2E는 문서 저장·검색 등 기능 단계를 통과했지만 최종 브라우저 경고 검사에서 운항 등록 후 `GET /api/health`의 429 한 건으로 실패했다. 기존 비차단 동시 요청 4개 제한에 해당하며 해당 경로·제한은 수정하지 않았다. 재실행 과정에서 `--force-recreate`만으로 의존 DB가 재생성되지 않는 것을 확인해 그 실행을 중단하고 테스트 프로젝트 전체를 `down`한 뒤 다시 실행했다.
+- 새 테스트 스택의 최종 E2E **1 passed (30.0초)**, 429 재현 없음. 루트에서 `docker compose -p haedap-rag-kiwi-check --profile e2e up --build --force-recreate --exit-code-from e2e e2e` 실행 후 같은 프로젝트의 `down`으로 정리했다. 실제 앱·DB는 재시작하거나 수정하지 않았으며 커밋·푸시는 하지 않았다. `git diff --check` 통과.
 
 ### 2026-10-21 — 최신 main과 BM25 통합
 

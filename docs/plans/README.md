@@ -16,6 +16,7 @@
 
 | 문서 | 내용 | 상태 |
 |---|---|---|
+| [`2026-10-22-rag-chunking-kiwi.md`](2026-10-22-rag-chunking-kiwi.md) | 목차·제목 청킹 및 Kiwi BM25 | 완료 |
 | [`2026-10-15-bm25-debug.md`](2026-10-15-bm25-debug.md) | 읽기 전용 BM25 디버그 CLI | 완료 |
 | [`2026-10-14-bm25-retrieval.md`](2026-10-14-bm25-retrieval.md) | 권한 적용 후 한영 BM25 문서 검색 | 완료 |
 | [`2026-10-13-openai-compatible-chat.md`](2026-10-13-openai-compatible-chat.md) | 모델 호출 전환·#11 검토 반영·CI 분리·후속 PR | 진행 중 |

@@ -8,7 +8,7 @@ import unicodedata
 import pytest
 
 from api.errors import ApiError
-from api.rag_retrieval import retrieve, tokenize
+from api.rag_retrieval import query_tokens, retrieve, tokenize
 from api.store.documents import DocumentStore
 
 
@@ -21,10 +21,49 @@ def chunk(identifier, content="", **fields):
 
 
 def test_tokenizer_normalizes_mixed_language_and_retains_frequency():
-    assert tokenize("ＦＵＥＬ fuel / IMO-2020 § A 1") == ["fuel", "fuel", "imo", "2020"]
-    assert tokenize("연료를") == ["연료를", "연료", "료를"]
+    assert tokenize("ＦＵＥＬ fuel / IMO-2020 § A 1") == ["fuel", "fuel", "imo", "2020", "1"]
+    assert tokenize("연료를") == ["연료"]
     assert tokenize(unicodedata.normalize("NFD", "연료를")) == tokenize("연료를")
     assert tokenize("!? \n") == []
+
+
+def test_kiwi_particles_endings_compounds_and_no_artificial_bigrams():
+    tokens = tokenize("선급이 자동으로 정지되는 경우는? 평형수의 검사를 실시한다.")
+    assert {"선급", "자동", "정지", "평형수", "검사"} <= set(tokens)
+    assert not {"으로", "동으", "되는", "경우", "형수", "선", "급"} & set(tokens)
+    assert tokenize("연료를 연료의") == ["연료", "연료"]
+
+
+def test_stopwords_keep_negation_thresholds_units_and_references():
+    tokens = tokenize("the fuel must not exceed 0.50% and 5 m. 901.1 적용하지 않는다. 허용되지 않고 없다.")
+    assert {"fuel", "not", "0.50", "5", "m", "901.1", "적용", "않", "없"} <= set(tokens)
+    assert not {"the", "and", "지", "고"} & set(tokens)
+    assert query_tokens("the and 및 또는") == []
+
+
+@pytest.mark.parametrize(("query", "content"), [
+    ("평형수의 검사", "ballast water inspection"),
+    ("heavy deck cargo", "중량 갑판화물 강화"),
+    ("중량 갑판 화물", "heavy deck cargoes strengthening"),
+    ("선급이 정지되는 기준", "suspension of class criteria"),
+    ("흘수", "draught requirements"),
+])
+def test_maritime_aliases_match_foreign_language_documents(query, content):
+    corpus = [chunk("target", content)] + [chunk(str(i), "galley cooking") for i in range(5)]
+    assert retrieve(query, corpus)[0]["id"] == "target"
+
+
+def test_expansion_uses_whole_terms_and_phrases_not_substrings_or_cascades():
+    assert "연료" not in query_tokens("refuelling")
+    assert "cii" not in query_tokens("carbon steel intensity")
+    assert "평형수" not in query_tokens("ballast pump water")
+    assert "cii" in query_tokens("carbon intensity")
+
+
+def test_grammatical_overlap_no_longer_matches_unrelated_document():
+    corpus = [chunk("target", "선급이 자동으로 정지된다."),
+              chunk("unrelated", "갑자기 수동으로 변경되는 경우다.")]
+    assert [r["id"] for r in retrieve("선급이 자동으로 정지되는 경우는?", corpus)] == ["target"]
 
 
 @pytest.mark.parametrize(("query", "focused", "broad", "unrelated"), [
