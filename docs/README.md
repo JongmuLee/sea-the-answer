@@ -30,6 +30,7 @@
 
 ### specs — 구현 계약
 
+- [표·차트와 입력량·시간](specs/answer-presentation.md) — 확정
 - [선원·관리자 인증](specs/authentication.md) — 구현됨
 - [업무 스킬 실행 계약](specs/workflow-skills.md): 여섯 스킬, 선택 문서·매핑·권한·초안·평가 범위.
 
@@ -43,6 +44,7 @@
 
 ### plans — 작업 계획
 
+- [교수 피드백: 표·차트와 입력량 검증](plans/2026-11-03-answer-presentation-and-load-validation.md) — 진행 중
 - [한국어 평가 사람 검토](plans/2026-11-03-korean-llm-human-review.md) — 완료
 - [한국어 근거 답변과 실제 모델 검증](plans/2026-10-28-korean-llm-validation.md) — 완료 (Docker e2e·모델 연결 검증, 일반 한국어 품질은 후속)
 - [해사 질문 검색 평가](plans/2026-10-28-maritime-retrieval-evaluation.md) — 초기 평가 완료

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import re
+from time import monotonic
 from uuid import uuid4
 
 import httpx
 from psycopg.types.json import Jsonb
 
 from .. import config, llm
+from ..answer_presentation import (UnsupportedMetric, excerpt_table, operation_presentation, output_format,
+                                   wants_operation_table)
 from ..errors import require
 from ..validation import number, stamp, text, utc_now
 
@@ -36,6 +39,7 @@ class AnswerStore:
                 "reason": "사용자가 확인·입력한 단일 기준과의 수치 비교입니다. 공식 판정은 아닙니다."}
 
     def answer(self, user: dict, payload: dict) -> dict:
+        started = monotonic()
         question = text(payload.get("question"), "질문", 2000)
         language = payload.get("language", "auto")
         require(language in ("auto", "ko", "en"), "언어를 확인해 주세요.")
@@ -44,21 +48,22 @@ class AnswerStore:
         require(mode in ("extractive", "llm"), "답변 모드를 확인해 주세요.")
         task = payload.get("task", "auto")
         require(task in ("auto", "documents", "operations", "integrated", "report"), "질문 유형을 확인해 주세요.")
+        requested = payload.get("outputFormat", "auto")
+        require(isinstance(requested, str) and requested in ("auto", "text", "table", "chart"), "출력 형식을 확인해 주세요.")
+        kind = output_format(question, requested)
+        en = language == "en"
+        notices = []
         needs_ops = task in ("operations", "integrated", "report") or task == "auto" and bool(re.search(
             r"운항|연료|배출|거리|속력|선박|항차|추이|계산|보고서|noon|mrv|vessel|ship|fuel|emission|distance|speed|report", question, re.I))
+        needs_ops = needs_ops or kind == "chart" and task != "documents"
+        retrieval_started = monotonic()
         evidence = [] if task == "operations" else self.search(user, question, payload.get("filter", "all"))
+        retrieval_ms = max(0, (monotonic() - retrieval_started) * 1000)
         statements = [{"text": item["text"], "chunkId": item["id"], "quote": item["text"]} for item in evidence[:3]]
         warnings = []
         generation = "extractive"
-        if mode == "llm" and evidence:
-            if not config.llm_configured():
-                warnings.append("MODEL_NOT_CONFIGURED")
-            else:
-                try:
-                    statements = self.grounded_statements(question, evidence, language)
-                    generation = "llm"
-                except (ValueError, KeyError, httpx.HTTPError):
-                    warnings.append("MODEL_FAILED_EXTRACTIVE_FALLBACK")
+        generation_ms = 0
+        presentation = None
         runs = []
         if payload.get("calculation") is not None:
             runs.append(self.calculate_emissions(payload["calculation"]))
@@ -76,6 +81,68 @@ class AnswerStore:
                 compliance = self.compare_criterion(user, payload.get("criterion"), summary)
                 if not summary["count"]:
                     warnings.append("OPERATIONS_NOT_FOUND")
+        operation_table = kind == "table" and wants_operation_table(question, task)
+        if kind == "chart" or operation_table:
+            try:
+                presentation = operation_presentation(summary, kind, question, language)
+            except UnsupportedMetric:
+                notices.append("Charts support recorded fuel, CO₂ emissions, distance or speed. Official CII ratings and other metrics are unavailable." if en else
+                               "차트는 실제 운항 기록의 연료·CO₂ 배출량·거리·속력만 지원합니다. 공식 CII 등급이나 다른 지표는 표시할 수 없습니다.")
+            except (ValueError, KeyError, TypeError, OverflowError):
+                notices.append("The selected records contain invalid chart/table values." if en else
+                               "선택한 운항 기록의 수치를 확인할 수 없어 표·차트를 표시하지 않습니다.")
+            if presentation is None and not notices:
+                notices.append("Select a ship and period with saved operation records for this table/chart." if en else
+                               "표·차트를 표시하려면 선박·기간을 선택하고 해당 운항 기록을 준비해 주세요.")
+        elif kind == "unsupported":
+            notices.append("New figures and diagrams are not supported. Open the original document to inspect its figures." if en else
+                           "새 그림·도식 생성과 원문 그림 자동 추출은 지원하지 않습니다. 기존 원문 열람으로 확인해 주세요.")
+
+        # Observability describes the exact user-message projection, not token counts.
+        selected, stats = llm.bound_evidence(question, evidence)
+        stats["modelCallAttempted"] = False
+        if mode == "llm" and evidence and kind not in {"chart", "unsupported"} and not operation_table:
+            if not config.llm_configured():
+                warnings.append("MODEL_NOT_CONFIGURED")
+            elif not selected:
+                warnings.append("MODEL_INPUT_TOO_LARGE")
+                notices.append("No complete source fits the model byte budget; showing source excerpts." if en else
+                               "참고할 원문이 답변 입력 한도보다 커서 원문 발췌를 표시합니다. 질문 범위를 좁혀 주세요.")
+            elif 28 - (monotonic() - started) < 1:
+                warnings.append("MODEL_TIME_BUDGET_EXHAUSTED")
+                notices.append("Search and preceding work used the generation budget; showing source excerpts." if en else
+                               "검색·선행 처리 후 남은 생성 시간이 부족해 원문 발췌를 표시합니다.")
+            else:
+                timeout = min(25, 28 - (monotonic() - started))
+                generation_started = monotonic()
+                diagnostics = {}
+                try:
+                    result = self.grounded_response(question, evidence, language, output_format="table" if kind == "table" else "text",
+                                                    timeout=timeout, diagnostics=diagnostics)
+                    statements = result["statements"]
+                    presentation = result.get("presentation")
+                    generation = "llm"
+                except (ValueError, KeyError, httpx.HTTPError):
+                    warnings.append("MODEL_FAILED_EXTRACTIVE_FALLBACK")
+                    if kind == "table":
+                        notices.append("The model table could not be verified; showing cited source excerpts." if en else
+                                       "모델 표의 형식·인용을 검증하지 못해 근거 원문 발췌 표를 표시합니다.")
+                finally:
+                    generation_ms = max(0, (monotonic() - generation_started) * 1000)
+                    stats = {key: diagnostics.get(key, stats[key]) for key in stats}
+        if mode == "llm" and stats["omittedEvidence"]:
+            notices.append("Some complete sources were omitted from model input to respect the byte budget." if en else
+                           "답변 입력 한도로 일부 근거를 제외했습니다. 검색된 원문을 확인하거나 질문 범위를 좁혀 주세요.")
+        if kind == "table" and not operation_table and presentation is None and generation == "extractive":
+            presentation = excerpt_table(evidence, language)
+            if presentation:
+                notices.append("This table contains source excerpts, not generated comparisons." if en else
+                               "이 표는 모델의 비교 결과가 아닌 근거 원문 발췌입니다.")
+        if kind == "table" and presentation is None and not notices:
+            notices.append("No supported table evidence is available." if en else "표로 표시할 검증된 근거가 부족합니다.")
+        if presentation and presentation.get("truncated"):
+            notices.append("Only the bounded first rows/points are shown; the total count is displayed separately." if en else
+                           "표시 한도로 처음 일부 행·점만 표시하며 전체 개수를 함께 안내합니다.")
         status = "data_found" if summary and summary["count"] else "evidence_found" if statements else "insufficient_evidence"
         if status == "insufficient_evidence":
             notice = "근거 또는 운항 데이터가 부족합니다. 담당자에게 확인해 주세요."
@@ -83,7 +150,14 @@ class AnswerStore:
         answer = {"id": answer_id, "question": question, "task": "integrated" if needs_ops else "documents",
                   "language": language, "generation": generation, "status": status, "notice": notice,
                   "warnings": warnings, "statements": statements, "evidence": evidence, "toolRuns": runs,
+                  "generationStats": stats,
+                  "timings": {"retrievalMs": round(retrieval_ms, 3), "generationMs": round(generation_ms, 3),
+                              "totalMs": round(max(0, (monotonic() - started) * 1000), 3)},
                   "reportSuggested": task == "report" or bool(re.search(r"보고서|noon|mrv|report", question, re.I))}
+        if presentation:
+            answer["presentation"] = presentation
+        if notices:
+            answer["presentationNotice"] = " ".join(notices)
         if summary is not None:
             answer["operations"] = summary
             answer["compliance"] = compliance
@@ -100,6 +174,13 @@ class AnswerStore:
         if settings is None:
             raise ValueError("Model not configured")
         return llm.grounded_statements(question, evidence, language, settings)
+
+    @staticmethod
+    def grounded_response(question: str, evidence: list[dict], language: str, **options) -> dict:
+        settings = config.llm_settings()
+        if settings is None:
+            raise ValueError("Model not configured")
+        return llm.grounded_response(question, evidence, language, settings, **options)
 
     def history(self, user: dict) -> list[dict]:
         rows = self.all("""SELECT q.* FROM queries q JOIN query_owner o ON o.id=q.id

@@ -203,6 +203,27 @@ def test_historical_calling_code_hash_is_preserved_not_compared_to_current_code(
     assert summarize(tmp_path, report_path, completed(worksheet))["status"] == "pass"
 
 
+def test_historical_schema_one_long_statement_remains_reviewable_under_new_runtime_caps(tmp_path, monkeypatch):
+    report_path, report = report_file(tmp_path, monkeypatch)
+    report["llm_code_sha256"] = "0" * 64
+    report["results"][0]["statements"][0]["text"] = "가" * 5000
+    report["results"][0]["contains_hangul"] = True
+    selected = [case for case in evaluation.load_cases() if case["id"] == "sulphur-limits"]
+    with pytest.raises(ValueError):
+        llm.validate_statements({"insufficient": False, "statements": report["results"][0]["statements"]},
+                                selected[0]["evidence"])
+    write_json(report_path, report)
+
+    def current_runtime_validator_is_not_a_saved_schema(*_args, **_kwargs):
+        raise AssertionError("Historical schema-1 reviews must not inherit newer runtime limits")
+
+    monkeypatch.setattr(llm, "validate_statements", current_runtime_validator_is_not_a_saved_schema)
+    worksheet = review.prepare(report_path)
+    assert len(worksheet["cases"][0]["result"]["statements"][0]["text"]) == 5000
+    assert worksheet["cases"][0]["verdict"] == "pending"
+    assert summarize(tmp_path, report_path, worksheet)["status"] == "pending"
+
+
 def test_saved_review_summary_does_not_depend_on_current_fixture_files(tmp_path, monkeypatch):
     report_path, _ = report_file(tmp_path, monkeypatch)
     worksheet = review.prepare(report_path)

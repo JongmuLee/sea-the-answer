@@ -87,6 +87,28 @@ def _read_report(path: Path) -> tuple[dict, str]:
     return report, hashlib.sha256(raw).hexdigest()
 
 
+def _validate_saved_statements(statements: list, evidence: list[dict], *, insufficient: bool) -> None:
+    """Validate the stable saved schema-1 contract, not current runtime caps.
+
+    Historical reports may predate runtime character and input-byte limits. Their
+    exact saved inputs, outputs and code hash remain reviewable under schema 1.
+    """
+    if insufficient:
+        if statements:
+            raise ValueError("Conflicting saved insufficiency result")
+        return
+    if not 1 <= len(statements) <= 5:
+        raise ValueError("Invalid saved statement count")
+    sources = {item["id"]: item["text"] for item in evidence}
+    for item in statements:
+        if (not isinstance(item, dict) or set(item) != {"text", "chunkId", "quote"}
+                or not _nonblank(item["text"])
+                or not isinstance(item["chunkId"], str) or item["chunkId"] not in sources
+                or not isinstance(item["quote"], str) or len(item["quote"].strip()) < 8
+                or item["quote"] not in sources[item["chunkId"]]):
+            raise ValueError("Invalid saved statement or citation")
+
+
 def _validate_run(report: dict, cases: list[dict]) -> None:
     """Bind source snapshots and technical output to their original input."""
     if (not isinstance(cases, list) or not cases
@@ -128,8 +150,7 @@ def _validate_run(report: dict, cases: list[dict]) -> None:
                     or (outcome == "insufficient" and (statements or row.get("citation_valid") is not None))
                     or (mode == "extractive" and outcome != "answered")):
                 raise ValueError("Inconsistent saved generation")
-            evaluation.llm.validate_statements({"insufficient": outcome == "insufficient",
-                                                "statements": statements}, evidence)
+            _validate_saved_statements(statements, evidence, insufficient=outcome == "insufficient")
         contains_hangul = bool(re.search(r"[가-힣]", " ".join(item["text"] for item in statements)))
         if row.get("contains_hangul") is not contains_hangul:
             raise ValueError("Inconsistent language check")

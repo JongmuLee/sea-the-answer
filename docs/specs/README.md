@@ -19,6 +19,7 @@
 
 | 문서 | 내용 | 상태 |
 |---|---|---|
+| [`answer-presentation.md`](answer-presentation.md) | 표·차트 응답·입력량·생성 시간 예산·측정 | 확정 |
 | [`authentication.md`](authentication.md) | 선원·관리자 인증·비밀번호·계정 회수 | 구현됨 |
 | [`llm-provider.md`](llm-provider.md) | Chat Completions 공통 설정·공급자 키 격리·출력 검증·한국어 고정 근거 평가 | 구현됨 (공급자별 실검증은 변경 이력 참고) |
 | [`api.md`](api.md) | HTTP API 전체, 인증·쓰기 보호, 문서 등록 payload | 구현됨 (1.3.1) |

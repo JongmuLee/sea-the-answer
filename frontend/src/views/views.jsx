@@ -1,5 +1,7 @@
 import React from 'react';
 import { SkillResult } from '../components/skill-result';
+import { AnswerPresentation } from '../components/answer-presentation';
+import { validatedPresentation } from '../lib/answer-presentation';
 import SkillsPanel from '../components/skills-panel';
 import * as helpers from '../components/common';
 export function createMainViews(model, views) {
@@ -108,7 +110,8 @@ export function createMainViews(model, views) {
   function answerView(a) {
     if (!a) return '';
     const en = a.language === 'en',
-      sources = [...new Set(a.evidence.map((e) => e.document_id))];
+      sources = [...new Set(a.evidence.map((e) => e.document_id))],
+      presentation = validatedPresentation(a.presentation, a.evidence);
     return (
       <article className={'card answer'}>
         <div className={'inline wrap'}>
@@ -158,7 +161,8 @@ export function createMainViews(model, views) {
             </React.Fragment>
           );
         })}
-        {!a.evidence.length && !a.skill
+        <AnswerPresentation answer={a} presentation={presentation} />
+        {!a.evidence.length && !a.skill && !a.operations?.count && presentation?.source !== 'operations'
           ? notice(
               en
                 ? 'Insufficient document evidence. Ask the responsible officer.'
