@@ -199,6 +199,18 @@ uv run --project backend python scripts/evaluate_llm.py --mode llm --output .ver
 
 한글 포함·원문 인용 일치는 의미적 정답이나 한국어 품질 합격을 뜻하지 않습니다. `semantic_review=pending`인 답변은 사람이 근거와 대조해야 합니다. 이 평가는 검색·권한·Docker·브라우저 검증을 포함하지 않습니다. 상세 [평가 계약](docs/specs/llm-provider.md#7-한국어-생성고정-근거-평가-계약-2026-10-28-확정), [실제 검증 기록](docs/changelog.md)을 참고하세요.
 
+저장된 평가에서 원문 문맥과 기대 사실을 함께 보는 사람 검토표를 만들 수 있습니다. 아래 명령은 모델·DB를 호출하지 않습니다. `korean-model.json`은 위 실제 모델 평가에서 생성한 파일이며, 도구 동작만 확인하려면 앞서 생성한 `korean-extractive.json`을 사용하세요.
+
+```powershell
+uv run --project backend python scripts/review_llm.py prepare --report .verification/korean-model.json --output .verification/korean-review.json
+# korean-review.json의 각 cases 항목에서 verdict, reviewer, reviewed_at, notes만 편집
+uv run --project backend python scripts/review_llm.py summarize --report .verification/korean-model.json --review .verification/korean-review.json --output .verification/korean-summary.json
+```
+
+각 사례의 `input.expected.facts`·`input.evidence`를 `result.statements`와 대조합니다. 수치·단위·조건과 누락·모순, 한국어 설명의 이해 가능성, 근거 부족 판단을 확인해 `verdict`를 `pending`에서 `pass` 또는 `fail`로 바꾸고, `reviewer`(검토자)·`reviewed_at`(`2026-11-03` 같은 ISO 날짜)·`notes`(판정 근거)를 채우세요. 아직 판단할 수 없으면 `pending`을 유지합니다. 나머지 원본·문맥·해시는 편집하지 않습니다.
+
+요약의 `status`는 실제 모델 결과에서 `pass`/`fail`/`pending`이며, 발췌 실행은 항상 `extractive`로 구분합니다. 모델 실행 오류는 합격으로 기록할 수 없고, 미검토가 남으면 전체 합격이 되지 않습니다. 종료 코드 0은 요약 처리 성공으로, 품질 합격 여부는 JSON의 `status`를 확인하세요. 원본 평가 파일을 다시 저장해 바이트가 바뀌거나 고정 입력이 달라지면 무결성 오류로 종료 코드 1을 반환합니다. 과거 자료는 `prepare --cases <과거-평가셋.json> --seed <과거-seed.json>`으로 지정할 수 있고, 한 번 만든 검토표의 요약은 저장된 문맥을 사용합니다. 새 출력 경로를 사용하세요. 상세 [사람 검토 계약](docs/specs/llm-provider.md#저장된-평가의-사람-검토-cli-2026-11-03-확정).
+
 ## 설정 (`.env`)
 
 | 변수 | 기본값 | 설명 |

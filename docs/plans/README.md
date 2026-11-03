@@ -16,6 +16,7 @@
 
 | 문서 | 내용 | 상태 |
 |---|---|---|
+| [`2026-11-03-korean-llm-human-review.md`](2026-11-03-korean-llm-human-review.md) | 저장된 한국어 평가의 사람 검토표·원본 연결·요약 | 진행 중 |
 | [`2026-10-28-korean-llm-validation.md`](2026-10-28-korean-llm-validation.md) | 한국어 평가·브라우저 회귀·Docker 및 실제 모델 연결 검증 | 완료 (일반 한국어 품질은 후속) |
 | [`2026-10-28-search-token-reuse.md`](2026-10-28-search-token-reuse.md) | 내용별 토큰 재사용과 검색 순위·권한·속도 회귀 검증 | 완료·로컬 검증 |
 | [`2026-10-28-maritime-retrieval-evaluation.md`](2026-10-28-maritime-retrieval-evaluation.md) | 원문 인용 기반 질문 평가와 BM25 지표·실패 분석 | 완료 |

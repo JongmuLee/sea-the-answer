@@ -43,6 +43,7 @@
 
 ### plans — 작업 계획
 
+- [한국어 평가 사람 검토](plans/2026-11-03-korean-llm-human-review.md) — 진행 중
 - [한국어 근거 답변과 실제 모델 검증](plans/2026-10-28-korean-llm-validation.md) — 완료 (Docker e2e·모델 연결 검증, 일반 한국어 품질은 후속)
 - [해사 질문 검색 평가](plans/2026-10-28-maritime-retrieval-evaluation.md) — 초기 평가 완료
 - [검색 토큰 재사용](plans/2026-10-28-search-token-reuse.md) — 로컬 구현·검증 완료
