@@ -211,6 +211,21 @@ uv run --project backend python scripts/review_llm.py summarize --report .verifi
 
 요약의 `status`는 실제 모델 결과에서 `pass`/`fail`/`pending`이며, 발췌 실행은 항상 `extractive`로 구분합니다. 모델 실행 오류는 합격으로 기록할 수 없고, 미검토가 남으면 전체 합격이 되지 않습니다. 종료 코드 0은 요약 처리 성공으로, 품질 합격 여부는 JSON의 `status`를 확인하세요. 원본 평가 파일을 다시 저장해 바이트가 바뀌거나 고정 입력이 달라지면 무결성 오류로 종료 코드 1을 반환합니다. 과거 자료는 `prepare --cases <과거-평가셋.json> --seed <과거-seed.json>`으로 지정할 수 있고, 한 번 만든 검토표의 요약은 저장된 문맥을 사용합니다. 새 출력 경로를 사용하세요. 상세 [사람 검토 계약](docs/specs/llm-provider.md#저장된-평가의-사람-검토-cli-2026-11-03-확정).
 
+### 표·차트 답변과 입력량 검증
+
+통합 질문에서 `GT와 DWT 차이를 표로 정리해줘`처럼 요청하면 행별 원문 근거를 가진 표를 표시합니다. AI 모드에서 표를 생성하지 못하면 원문 발췌 표와 안내를 표시합니다. 선박·기간과 운항 분석을 선택하고 `CO₂ 배출량을 막대그래프로 보여줘` 또는 `연료 사용량 추이를 그래프로 보여줘`라고 요청하면 실제 저장된 기록의 차트를 표시합니다. 차트의 축·단위·정확한 값은 데이터 표에서 확인합니다. 새 그림 생성과 PDF 그림 자동 추출은 지원하지 않으며 원문 그림은 PDF 열람을 사용합니다.
+
+많은 자료는 전체 집계와 표시 범위를 구분합니다. 요청 표는 최대 50행, 차트는 100점, 운항 요약의 원본 기록 미리보기는 200건입니다. 문서 근거를 생성 입력에 모두 넣지 못했거나 남은 생성 시간이 부족하면 안내와 원문 발췌로 전환합니다. 자세한 [지원 범위와 계약](docs/specs/answer-presentation.md)을 참고하세요.
+
+입력량별 진단 명령은 저장소 최상위에서 실행합니다. 기본은 실제 seed 절을 추가하는 오프라인 발췌 시험이며 실제 문서 검색 규모 시험과 구분합니다. 실제 모델은 앞 절의 프로세스 모델 설정 후 `--mode llm`을 명시합니다. 새 출력 파일명을 사용하세요.
+
+```powershell
+uv run --project backend python scripts/evaluate_llm_load.py --output .verification/llm-load-offline.json
+uv run --project backend python scripts/evaluate_llm_load.py --mode llm --case sulphur-limits --scenario one --scenario five --scenario five-long --output .verification/llm-load-model.json
+```
+
+결과에서 공급/선택 근거 수·바이트·생략된 ID·정답 근거 포함 여부, 실행 시간과 오류를 확인합니다. 바이트는 토큰 수가 아니며, 인용 검사 통과를 의미 정답으로 집계하지 않습니다. API의 단계별 계산 시간과 클라이언트가 측정한 전체 응답 시간도 구분합니다.
+
 ## 설정 (`.env`)
 
 | 변수 | 기본값 | 설명 |

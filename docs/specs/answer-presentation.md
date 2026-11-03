@@ -12,9 +12,11 @@
 - `POST /api/ask` 요청 `outputFormat`: `auto`(기본), `text`, `table`, `chart`.
 - 자동 모드는 질문의 명시적인 표·차트/그래프 요청을 해석한다. 일반 질문은 문장 응답이다. 새로운 그림/도식 생성 등 미지원 요청은 안내하며 임의의 이미지 URL·HTML·SVG를 모델에서 실행하지 않는다.
 - 문서 표: `presentation={type:"table",source:"documents",title,columns:[문자열],rows:[{cells:[문자열],citations:[{chunkId,quote}]}]}`. 각 행의 1~5개 인용은 제공된 근거 ID와 정확한 원문에 연결한다. 모델의 문장·표 생성은 한 번 호출하며 행/인용이 무효이면 전체 모델 결과를 거절하고 발췌로 전환한다.
+- 표 요청의 모델 내부 JSON은 `{answer:{insufficient,statements,table}}`다. 루트는 객체이고 `answer`의 중첩 `anyOf`로 정상 답변(`insufficient=false`, 문장 1개 이상·실제 표)과 근거 부족(`insufficient=true`, 빈 문장·`table=null`)을 분리한다. 기본 문장 모델 JSON은 기존 구조를 유지한다. 서버는 같은 일관성과 정확한 인용을 다시 검증한다.
 - 운항 표는 같은 표 구조에서 `source:"operations"`, 행 `citations:[]`이며 실제 조회 자료로 구성한다. 질문·작업 종류에 맞는 운항 맥락이 있을 때 사용하고, 선박이 선택됐다는 이유만으로 규정 비교 표를 운항 표로 바꾸지 않는다.
 - 운항 차트: `presentation={type:"chart",source:"operations",chartType:"line"|"bar",title,xLabel,yLabel,unit,points:[{label,value}]}`. 숫자는 조회·계산한 유한한 0 이상 값만 사용한다. 없는 값·공식 CII 등급을 모델이 만들어 채우지 않는다.
 - 표는 최대 8열·50행, 셀 1,000자·열 제목 80자·제목 200자다. 차트는 최대 100점, 점 이름 80자·단위 40자다. 한도를 넘는 자료는 `truncated`, `totalRows` 또는 `totalPoints`로 표시 개수와 전체 개수를 구분한다.
+- `answer.operations`의 합계·건수는 선택한 전체 기간 자료로 계산하며, 기존 요약 그래프·기록 표용 `rows`는 처음 200건의 미리보기다. `rowsTruncated`, `totalRows`로 전체와 표시 범위를 안내한다. 전역 운항 조회 API와 원본 기록은 바꾸지 않는다.
 - 자료가 없거나 지원하지 않는 시각화라면 `presentationNotice`로 사유를 표시하고 가능한 기존 문장·인용을 유지한다. 원문 PDF의 표·그림은 기존 원문 열람 링크로 볼 수 있다.
 - 화면은 모델 문자열을 HTML로 해석하지 않고, 표의 행/열·차트 축·단위·자료 표·원문 인용을 접근 가능한 요소로 표시한다. 무효 표현 데이터는 화면 오류 대신 안내와 기존 답변을 표시한다.
 

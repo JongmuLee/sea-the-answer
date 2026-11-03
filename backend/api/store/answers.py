@@ -143,6 +143,9 @@ class AnswerStore:
         if presentation and presentation.get("truncated"):
             notices.append("Only the bounded first rows/points are shown; the total count is displayed separately." if en else
                            "표시 한도로 처음 일부 행·점만 표시하며 전체 개수를 함께 안내합니다.")
+        if summary is not None and len(summary["rows"]) > 200:
+            notices.append("Operation totals include all selected records; the input-record preview shows only the first 200." if en else
+                           "운항 합계는 선택 기간의 전체 기록으로 계산했으며 입력 기록 미리보기는 처음 200건만 표시합니다.")
         status = "data_found" if summary and summary["count"] else "evidence_found" if statements else "insufficient_evidence"
         if status == "insufficient_evidence":
             notice = "근거 또는 운항 데이터가 부족합니다. 담당자에게 확인해 주세요."
@@ -159,7 +162,9 @@ class AnswerStore:
         if notices:
             answer["presentationNotice"] = " ".join(notices)
         if summary is not None:
-            answer["operations"] = summary
+            answer["operations"] = {**summary, "rows": summary["rows"][:200],
+                                    "rowsTruncated": len(summary["rows"]) > 200,
+                                    "totalRows": len(summary["rows"])}
             answer["compliance"] = compliance
         if operation_notice:
             answer["operationNotice"] = operation_notice

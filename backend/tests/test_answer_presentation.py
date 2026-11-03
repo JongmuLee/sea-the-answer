@@ -48,15 +48,16 @@ def model(monkeypatch):
     monkeypatch.setattr(config, "llm_configured", lambda: True)
     monkeypatch.setattr(config, "llm_settings", lambda: SETTINGS)
 
-    def install(answer, *, elapsed=None):
+    def install(answer, *, elapsed=None, wrap_table=True):
         calls = []
 
         def handler(request):
             calls.append(request)
             if elapsed:
                 elapsed()
+            content = {"answer": answer} if wrap_table and isinstance(answer, dict) and "table" in answer else answer
             return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {
-                "role": "assistant", "content": json.dumps(answer)}}]})
+                "role": "assistant", "content": json.dumps(content)}}]})
 
         client = httpx.Client(transport=httpx.MockTransport(handler))
         clients.append(client)
@@ -94,7 +95,19 @@ def test_document_table_uses_one_model_call_with_cited_rows_and_bounded_stats(mo
     result = answer()
     assert len(calls) == 1
     body = json.loads(calls[0].content)
-    assert set(body["response_format"]["json_schema"]["schema"]["required"]) == {"insufficient", "statements", "table"}
+    schema = body["response_format"]["json_schema"]["schema"]
+    assert schema["type"] == "object" and schema["required"] == ["answer"]
+    assert schema["additionalProperties"] is False and "anyOf" not in schema
+    supported, insufficient = schema["properties"]["answer"]["anyOf"]
+    assert supported["properties"]["insufficient"]["enum"] == [False]
+    assert supported["properties"]["statements"]["minItems"] == 1
+    assert supported["properties"]["table"]["type"] == "object"
+    assert insufficient["properties"]["insufficient"]["enum"] == [True]
+    assert insufficient["properties"]["statements"]["maxItems"] == 0
+    assert insufficient["properties"]["table"] == {"type": "null"}
+    assert all(set(branch["required"]) == {"insufficient", "statements", "table"}
+               and branch["additionalProperties"] is False for branch in (supported, insufficient))
+    assert '"answer":{"insufficient":false' in body["messages"][0]["content"]
     assert result["generation"] == "llm"
     assert result["presentation"]["rows"] == TABLE["rows"]
     assert result["presentation"]["source"] == "documents"
@@ -142,6 +155,25 @@ def test_table_insufficiency_requires_null_table_and_preserves_empty_statements(
     assert result["presentationNotice"]
 
 
+@pytest.mark.parametrize("invalid", [
+    {"insufficient": False, "statements": [STATEMENT], "table": None},
+    {"insufficient": True, "statements": [], "table": TABLE},
+])
+def test_server_rejects_inconsistent_table_branch_without_relaxing_schema_or_citations(model, invalid):
+    calls = model(invalid)
+    result = answer()
+    assert len(calls) == 1 and result["generation"] == "extractive"
+    assert result["warnings"] == ["MODEL_FAILED_EXTRACTIVE_FALLBACK"]
+    assert result["presentation"]["title"] == "Source excerpts"
+
+
+def test_server_rejects_obsolete_unwrapped_table_shape(model):
+    calls = model({"insufficient": False, "statements": [STATEMENT], "table": TABLE}, wrap_table=False)
+    result = answer()
+    assert len(calls) == 1 and result["generation"] == "extractive"
+    assert result["warnings"] == ["MODEL_FAILED_EXTRACTIVE_FALLBACK"]
+
+
 def test_operations_chart_uses_actual_numbers_and_never_contacts_model(model):
     calls = model({})
     result = answer(Workspace(summary=operations()), question="Show fuel as a bar chart", task="operations",
@@ -161,6 +193,23 @@ def test_operation_table_truncates_honestly_without_fabricated_document_citation
     chart = presentation.operation_presentation(operations(101), "chart", "emission", "en")
     assert len(chart["points"]) == 100 and chart["totalPoints"] == 101 and chart["truncated"] is True
     assert chart["points"][0]["value"] == 8.0
+
+
+@pytest.mark.parametrize("kind,shown", [("table", 50), ("chart", 100)])
+def test_answer_bounds_legacy_operation_rows_after_full_aggregation_and_presentation(kind, shown):
+    summary = operations(250)
+    summary.update(fuel=625.0, emission=2000.0, distance=3000.0, speed=6.0)
+    result = answer(Workspace(summary=summary), question="Show fuel records", task="operations", outputFormat=kind,
+                    context={"ship": "ship-1", "from": "2026-01-01", "to": "2026-11-03"})
+    preview = result["operations"]
+    assert len(preview["rows"]) == 200 and preview["rowsTruncated"] is True and preview["totalRows"] == 250
+    assert preview["count"] == 250 and preview["fuel"] == 625.0 and preview["emission"] == 2000.0
+    assert preview["distance"] == 3000.0 and preview["speed"] == 6.0
+    assert len(summary["rows"]) == 250  # Shared summary/global API data was not mutated.
+    display = result["presentation"]
+    assert len(display["rows"] if kind == "table" else display["points"]) == shown
+    assert display["totalRows" if kind == "table" else "totalPoints"] == 250
+    assert "all selected records" in result["presentationNotice"] and "200" in result["presentationNotice"]
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), -1, True, "3"])

@@ -141,9 +141,15 @@ export function createExtendedViews(model, views) {
             </div>
             <div className={'card pad mt'}>
               <h3>{en ? 'Daily CO₂ emissions' : '일별 CO₂ 배출량'}</h3>
+              {s.rowsTruncated && notice(en
+                ? `Totals include all ${n(s.totalRows, 0)} records; the graph and table below show only the first ${n(s.rows.length, 0)}.`
+                : `총 ${n(s.totalRows, 0)}건으로 집계했으며, 아래 그래프·표는 처음 ${n(s.rows.length, 0)}건만 표시합니다.`)}
               {chartSVG([s.ship.id], 'emission', s.rows, [s.ship], s.from, s.to)}
               <details>
-                <summary>{en ? 'View input records' : '계산에 사용한 기록 보기'}</summary>
+                <summary>{s.rowsTruncated
+                  ? en ? `View displayed records (${n(s.rows.length, 0)} / ${n(s.totalRows, 0)})`
+                    : `표시한 기록 보기 (${n(s.rows.length, 0)} / ${n(s.totalRows, 0)}건)`
+                  : en ? 'View input records' : '계산에 사용한 기록 보기'}</summary>
                 <div className={'tablewrap'}>
                   <table>
                     <thead>

@@ -317,3 +317,28 @@ test('unavailable or malformed presentation retains the answer without executing
   await expect(page.locator('.answer')).toContainText('보존해야 하는 본문 답변입니다.');
   expect(state.errors).toEqual([]);
 });
+
+test('operation preview labels partial rows while preserving full aggregate totals', async ({ page }) => {
+  const state = await mockWorkspace(page);
+  const rows = Array.from({ length: 200 }, (_, index) => ({
+    id: `preview-${index}`, ship: 'ship-1',
+    date: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
+    fuel: 10, factor: 3.114, distance: 100, speed: 10,
+  }));
+  state.answerPatch = { status: 'data_found', operations: {
+    ship: { id: 'ship-1', name: '검증 선박', dwt: 1000 }, from: '2026-01-01', to: '2026-12-31',
+    count: 1000, totalRows: 1000, rowsTruncated: true, rows,
+    fuel: 50000, emission: 155700, distance: 100000, sample: false,
+  } };
+  await page.goto('/chat');
+  await ask(page, '선박의 전체 운항 기록을 요약해줘');
+  const result = page.locator('.integrated-result');
+  await expect(result).toContainText('1000개 기록');
+  await expect(result).toContainText('총 1,000건으로 집계했으며, 아래 그래프·표는 처음 200건만 표시합니다.');
+  await expect(result.locator('.stat-value').first()).toContainText('50,000.0');
+  await expect(result.locator('svg.chart circle')).toHaveCount(200);
+  await result.getByText('표시한 기록 보기 (200 / 1,000건)', { exact: true }).click();
+  await expect(result.locator('table tbody tr')).toHaveCount(200);
+  await expect(result.getByText('계산에 사용한 기록 보기', { exact: true })).toHaveCount(0);
+  expect(state.errors).toEqual([]);
+});
