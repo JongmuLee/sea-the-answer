@@ -86,22 +86,25 @@ sequenceDiagram
   participant API as routes/documents.ask
   participant WS as Workspace.answer
   participant DB as PostgreSQL
-  UI->>API: question, task, context{ship,from,to}, criterion
+  UI->>API: question, task, context{ship,from,to}, criterion, outputFormat
   API->>WS: 사용자·CSRF 확인 후 호출
   WS->>DB: search() — 적용 중 문서의 청크 중 열람 가능한 것
   WS->>WS: 권한·상태·종류 필터 → 한영 토큰·동의어 → BM25 → 상위 5
-  alt mode=llm 이고 모델 설정됨
-    WS->>WS: 외부 LLM → 인용 구절이 원문에 있는지 검사
+  WS->>DB: 운항 필요 시 operation_summary(ship, from, to)
+  WS->>WS: criterion 있으면 단일 기준 수치 비교
+  alt mode=llm 이고 설정·입력·남은 시간 예산 충족
+    WS->>WS: 외부 LLM → 문장·요청 표의 구조와 정확한 원문 인용 검사
   else
     WS->>WS: 상위 3개 원문 발췌
   end
-  WS->>DB: 운항 필요 시 operation_summary(ship, from, to)
-  WS->>WS: criterion 있으면 단일 기준 수치 비교
+  WS->>WS: 실제 운항 자료의 요청 표·차트와 200건 미리보기 구성
   WS->>DB: queries + query_owner + audit 기록
-  WS-->>UI: statements, evidence, operations, compliance, ...
+  WS-->>UI: statements, evidence, operations, presentation, timings, ...
 ```
 
 응답 형식은 [`specs/integrated-answer.md`](specs/integrated-answer.md)를 따릅니다.
+
+표·차트의 자료/인용 검증과 표시 범위는 [`specs/answer-presentation.md`](specs/answer-presentation.md)를 따른다. LLM 사용자 메시지는 완전한 근거 단위의 바이트 예산으로 제한하고, 운항 조회·계산은 생성 전에 완료해 남은 호출 시간을 계산한다. 전체 집계와 200건 기록 미리보기는 구분하며 인증·조회·원본 데이터 경계는 유지한다.
 
 ## 3. 모듈 책임 (`backend/`)
 

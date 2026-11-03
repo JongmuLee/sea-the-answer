@@ -1,6 +1,6 @@
 # 표·차트 응답과 입력량·시간 관측 계약
 
-- 상태: 확정 (2026-11-03)
+- 상태: 구현됨 (2026-11-03, 실제 모델 의미 품질 수용은 별도)
 - 관련: [통합 답변](integrated-answer.md), [LLM 공급자](llm-provider.md), [작업 계획](../plans/2026-11-03-answer-presentation-and-load-validation.md)
 
 ## 1. 목적과 범위

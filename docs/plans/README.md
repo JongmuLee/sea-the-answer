@@ -16,7 +16,7 @@
 
 | 문서 | 내용 | 상태 |
 |---|---|---|
-| [`2026-11-03-answer-presentation-and-load-validation.md`](2026-11-03-answer-presentation-and-load-validation.md) | 교수 피드백의 표·차트 연동·입력량/시간 검증 | 진행 중 |
+| [`2026-11-03-answer-presentation-and-load-validation.md`](2026-11-03-answer-presentation-and-load-validation.md) | 교수 피드백의 표·차트 연동·입력량/시간 검증 | 완료 |
 | [`2026-11-03-korean-llm-human-review.md`](2026-11-03-korean-llm-human-review.md) | 저장된 한국어 평가의 사람 검토표·원본 연결·요약 | 완료 |
 | [`2026-10-28-korean-llm-validation.md`](2026-10-28-korean-llm-validation.md) | 한국어 평가·브라우저 회귀·Docker 및 실제 모델 연결 검증 | 완료 (일반 한국어 품질은 후속) |
 | [`2026-10-28-search-token-reuse.md`](2026-10-28-search-token-reuse.md) | 내용별 토큰 재사용과 검색 순위·권한·속도 회귀 검증 | 완료·로컬 검증 |
