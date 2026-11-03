@@ -457,7 +457,12 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     const restore = page.locator(`[data-action=restoreBackup][data-id="${backup.id}"]`);
     await restore.click();
     await page.locator('#f-confirm').fill('복구');
+    const restoreResponse = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/backups/restore' && response.request().method() === 'POST');
     await submit('#restoreForm');
+    const restored = await restoreResponse;
+    const restoreResult = await restored.json();
+    expect(restored.status(), JSON.stringify(restoreResult.error || {})).toBe(200);
     await page.locator('#authForm').waitFor();
     expect((await api('/api/health')).data.user.role).toBe('guest');
     expect((await api('/api/operations')).status).toBe(401);
