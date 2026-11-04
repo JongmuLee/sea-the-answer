@@ -1,6 +1,6 @@
 # 아키텍처
 
-> 대상 버전: 1.4.0 · 최종 확인: 2026-10-28 (코드 대조)
+> 대상 버전: 1.4.0 · 최종 확인: 2026-11-04 (main 통합 코드 대조)
 > 이 문서는 **현재 구현**을 설명합니다. 앞으로 바꿀 계획은 [`plans/`](plans/), 바뀌지 않을 결정의 이유는 [`adr/`](adr/)에 있습니다.
 
 ## 현재 Python 문서 경로 (2026-10-13)
@@ -11,7 +11,7 @@
 
 2026-10-18 문서 정보 수정 경로: `frontend/src/lib/document-save.js`가 정보 변경과 본문 개정을 구분한다. `document.save`의 `mode: "metadata"`는 같은 저장 모듈에서 현재 개정·정보 버전을 검사하고 `document_meta`만 갱신한다. 본문 개정은 새로 제공한 원문만 전송하고 기존 조회 청크를 원문으로 재사용하지 않는다. 신규 원문 전처리 결과가 0개면 저장을 거부한다. DB 스키마·검색 알고리즘·백업 구조는 유지한다.
 
-전처리는 웹·DB 의존성이 없는 함수이고 문서 ID·제목은 저장 계층에서 기존 관계로 연결한다. 청킹 규칙과 변경 적용 범위는 [API 전처리 계약](specs/api.md#python-문서-전처리-계약-2026-10-13-확정), 검증과 새 구조 통합 기록은 [작업 기록](plans/2026-10-13-rag-preprocessing.md)에 있다. 2026-10-14부터 검색은 `api/rag_retrieval.py`의 BM25Okapi를 사용한다. 저장 계층이 권한·상태·종류를 먼저 필터링하고 모듈은 허용된 청크만 토큰화·정렬한다. PostgreSQL 저장·개정·전처리는 변경하지 않는다.
+전처리는 웹·DB 의존성이 없는 함수이고 문서 ID·제목은 저장 계층에서 기존 관계로 연결한다. 청킹 규칙과 변경 적용 범위는 [API 전처리 계약](specs/api.md#python-문서-전처리-계약-2026-10-13-확정), 검증과 새 구조 통합 기록은 [작업 기록](plans/2026-10-13-rag-preprocessing.md)에 있다. 현재 검색은 저장 계층이 권한·상태·종류·선택 문서 범위를 먼저 확정한 뒤 `api/rag_search.py`가 BM25와 로컬 E5 벡터 결과를 RRF로 결합한다. 모델·색인 준비 실패 시 BM25로 대체하며, 검색 후 현재 PostgreSQL 후보를 다시 조회해 원문·권한 변경 결과를 제거한다. 저장 시에는 기존 문서·청크·개정 규칙을 유지하면서 자동 색인 작업을 같은 트랜잭션에 기록한다.
 
 ## 1. 한눈에 보기
 
@@ -86,6 +86,7 @@ flowchart LR
 - `src/lib/api.js` — 유일한 서버 호출 지점. `X-Haedap-Token`(CSRF), `X-Haedap-Identity`(현재 사용자 확인) 헤더를 붙임.
 - `src/lib/pdf.js` — 브라우저 안의 PDF.js로 텍스트 추출(업로드 PDF는 외부로 보내지 않음). `src/lib/csv.js` — 운항 CSV 파싱.
 - `src/lib/model.js` — 클라이언트 상태 모델, 미저장 초안의 `localStorage` 보관.
+- `src/lib/answer-presentation.js`, `src/components/answer-presentation.jsx` — 응답의 표·차트 구조와 자료 범위를 확인하고, 행별 원문 인용 버튼·축·단위·자료 표를 표시. 모델 문자열을 HTML로 실행하지 않으며 잘못된 표현은 안내와 기존 문장 응답으로 처리한다.
 
 ### 2.3 통합 질문 (`POST /api/ask`)
 
@@ -95,22 +96,31 @@ sequenceDiagram
   participant API as routes/documents.ask
   participant WS as Workspace.answer
   participant DB as PostgreSQL
-  UI->>API: question, task, context{ship,from,to}, criterion
+  UI->>API: question, task, context{ship,from,to}, criterion, outputFormat
   API->>WS: 사용자·CSRF 확인 후 호출
-  WS->>DB: search() — 적용 중 문서의 청크 중 열람 가능한 것
-  WS->>WS: 권한·상태·종류 필터 → BM25·벡터 RRF 결합 → 상위 5 (준비 실패 시 BM25)
-  alt mode=llm 이고 모델 설정됨
-    WS->>WS: 외부 LLM → 인용 구절이 원문에 있는지 검사
-  else
-    WS->>WS: 상위 3개 원문 발췌
-  end
+  WS->>DB: search_candidates() — 권한·활성 개정·상태·종류·선택 문서 필터
+  WS->>WS: BM25·로컬 E5 벡터 → RRF 상위 5 (준비 실패 시 BM25)
+  WS->>DB: 후보 재조회 → 원문·권한 변경 결과 제거
   WS->>DB: 운항 필요 시 operation_summary(ship, from, to)
   WS->>WS: criterion 있으면 단일 기준 수치 비교
+  WS->>WS: 실제 운항 전체 자료로 요청한 표·차트 구성
+  WS->>WS: 완전 근거 단위의 입력 바이트·선행 처리 후 남은 시간 확인
+  alt 문서 문장·표의 mode=llm 이고 설정·입력·남은 시간 예산 충족
+    WS->>WS: 외부 LLM → 문장·요청 표의 구조와 정확한 원문 인용 검사
+    opt 호출·검증 실패
+      WS->>WS: 원문 발췌로 전환·사유 기록
+    end
+  else
+    WS->>WS: 모델 호출 없이 기존 원문 발췌·자료 응답 유지
+  end
+  WS->>WS: 전체 운항 집계를 보존하고 답변 기록 미리보기는 최대 200건
   WS->>DB: queries + query_owner + audit 기록
-  WS-->>UI: statements, evidence, operations, compliance, ...
+  WS-->>UI: statements, evidence, operations, presentation, timings, ...
 ```
 
 응답 형식은 [`specs/integrated-answer.md`](specs/integrated-answer.md)를 따릅니다.
+
+표·차트의 자료/인용 검증과 표시 범위는 [`specs/answer-presentation.md`](specs/answer-presentation.md)를 따른다. LLM 사용자 메시지는 완전한 근거 단위로 8,192 UTF-8 바이트 안에 구성한다. 검색·운항 조회·계산을 생성 전에 완료하고, 답변 처리의 28초 예산에서 선행 처리 시간을 뺀 값과 기존 25초 중 작은 값을 모델 HTTP 제한으로 사용한다. 1초 미만이면 호출하지 않으며 HTTP 제한은 전체 처리의 강제 종료 시한이 아니다. 실제 운항 자료로 구성한 요청 표는 최대 50행, 요청 차트는 최대 100점이며, 전체 집계와 별도 운항 기록 미리보기 200건을 구분한다. 인증·조회·원본 데이터 경계는 유지한다.
 
 ## 3. 모듈 책임 (`backend/`)
 
@@ -124,10 +134,14 @@ sequenceDiagram
 | `api/routes/` | 경로 표와 도메인별 핸들러: `system`(health·tools), `auth`, `documents`(문서·PDF·ask·search·history), `operations`, `changes`, `reports`, `admin`(users·logs·backups) |
 | `api/store/` | `Workspace` = `base.Database`(연결·트랜잭션) + 도메인 mixin: `users`, `documents`(청크 900자·검색), `operations`, `changes`, `reports`, `answers`(통합 답변·선택적 LLM), `tools`, `backups` |
 | `api/config.py`, `api/deps.py` | 환경 설정(DB 주소, 백업 경로, 허용 호스트), `Workspace` 열기와 최초 1회 초기화 |
-| `api/llm.py` | Chat Completions 호출, 선택적 JSON 출력 형식, 모델 JSON·원문 인용 검증. URL 호스트별 키 선택과 설정 판정은 `config.llm_settings()`를 health·답변이 공유 |
+| `api/llm.py` | 완전한 근거 단위의 입력 바이트 제한, 남은 HTTP 호출 시간 적용, Chat Completions 호출과 문장·요청 표의 JSON·원문 인용 검증. URL 호스트별 키 선택과 설정 판정은 `config.llm_settings()`를 health·답변이 공유 |
+| `api/answer_presentation.py` | 표·차트 요청 해석, 문서 표의 행별 원문 인용 검증, 실제 운항 자료의 표·선/막대 차트 구성과 표시 한도. 모델·DB를 직접 호출하지 않음 |
 | `api/rag_preprocessing.py` | 저장 전 페이지별 텍스트 정리·경계 기반 최대 900자 청킹. DB·웹 의존성 없음 |
 | `api/rag_retrieval.py` | 허용된 청크의 제목·출처·heading·본문을 토큰화해 BM25 정렬. 내부 score는 저장 계층에서 제거해 기존 evidence 응답 유지 |
 | `api/rag_vocabulary.py` | Kiwi 해사 사용자 단어, 한영 별칭, 제한적인 불용어. 검색용 사전이며 원문은 변경하지 않음 |
+| `api/rag_search.py`, `api/rag_hybrid.py` | 허용된 PostgreSQL 후보의 BM25·벡터 검색과 RRF 결합, 준비 실패 시 BM25 대체. 최종 원문·권한 재확인은 `store/documents.py`가 수행 |
+| `api/rag_embeddings.py`, `api/rag_vector.py` | 고정 로컬 E5 모델 계약·입력 검증과 재구축 가능한 Chroma 색인. 검색 결과 본문은 현재 PostgreSQL 후보 행으로 구성 |
+| `api/rag_jobs.py`, `api/rag_worker.py` | 문서 저장 트랜잭션의 자동 색인 작업 기록과 별도 worker의 획득·임베딩·세대 확인·완료 처리 |
 | `api/errors.py`, `api/validation.py` | `ApiError`·`require`, 입력 검증·형식 도우미 |
 | `knowledge/seed.json`, `knowledge/documents/`, `knowledge/sample-data.json` | 기본 문서와 그 원본 PDF(`file` 필드로 연결), "예시 데이터 넣기"용 가상 운항 기록 |
 | `tools/` | 서비스 실행 중 사용하는 읽기 전용 해사 데이터 조회·계산·규칙 기반 조회 도우미(8절) |
@@ -137,7 +151,7 @@ sequenceDiagram
 
 DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유합니다. backend는 테이블이 없으면 `SCHEMA_NOT_READY`(503)를 반환합니다.
 
-개발자용 `scripts/debug_bm25.py`는 backend 기본 uv 의존성만 사용하는 읽기 전용 진단 도구다. `DocumentStore.search_candidates`의 기존 조회·권한·상태·kind 필터와 `rag_retrieval.query_tokens/chunk_tokens/retrieve`를 공유한다. API는 계속 score 없는 상위 5개를 반환하고, CLI만 점수·일치 토큰·미리보기를 출력한다. DB READ ONLY 트랜잭션에서 실행하며 초기화·저장·질문 이력·LLM 호출은 하지 않는다. 운영 이미지에는 스크립트를 포함하지 않고 실행할 때 읽기 전용 마운트한다. 기본 guest 또는 명시한 기존 활성 계정의 scope를 적용하며 DB 자격 증명을 가진 개발자 전용이다. [실행 방법](../README.md#bm25-개발자-디버그), [출력 계약](specs/api.md#개발자-진단-cli-계약-2026-10-15-확정).
+개발자용 `scripts/debug_bm25.py`는 backend 기본 uv 의존성만 사용하는 읽기 전용 BM25 진단 도구다. `DocumentStore.search_candidates`의 기존 조회·권한·상태·kind 필터와 `rag_retrieval.query_tokens/chunk_tokens/retrieve`를 공유한다. 웹 API는 하이브리드 검색 또는 BM25 대체 결과를 score 없이 최대 5개 반환하며, 이 CLI는 BM25 점수·일치 토큰·미리보기를 출력한다. DB READ ONLY 트랜잭션에서 실행하며 초기화·저장·질문 이력·LLM 호출은 하지 않는다. 운영 이미지에는 스크립트를 포함하지 않고 실행할 때 읽기 전용 마운트한다. 기본 guest 또는 명시한 기존 활성 계정의 scope를 적용하며 DB 자격 증명을 가진 개발자 전용이다. [실행 방법](../README.md#bm25-개발자-디버그), [출력 계약](specs/api.md#개발자-진단-cli-계약-2026-10-15-확정).
 
 개발자용 `scripts/evaluate_llm.py`는 기본 문서에서 고정 근거를 골라 한국어 생성만 비교한다. 기본 원문 발췌는 네트워크 없이 실행하고, 명시적 `--mode llm`만 기존 `api/llm.py`의 실제 모델 호출·원문 인용 검증을 사용한다. DB·검색·권한·이력 저장 경로를 호출하지 않으며 서비스 런타임에도 포함하지 않는다. 결과의 의미적 정답성은 사람 검토로 남긴다. [평가 계약](specs/llm-provider.md#7-한국어-생성고정-근거-평가-계약-2026-10-28-확정), [실행 방법](../README.md#한국어-답변-고정-근거-평가).
 
@@ -163,8 +177,9 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 
 | 바꾸려는 것 | 시작 위치 | 지켜야 할 계약 |
 |---|---|---|
-| 검색(벡터·하이브리드 RAG) | `api/store/documents.py`의 `search`, `save_document`의 청크 분할 | 열람 범위 필터 유지, evidence 필드 형식 |
-| 답변 생성(LLM 공급자) | `api/llm.py`, `api/config.py`, `api/store/answers.py`의 `mode=llm` 분기 | [공급자 계약](specs/llm-provider.md), statements의 `chunkId`·`quote` 인용 검증 |
+| 검색(벡터·하이브리드 RAG) | `api/store/documents.py`의 `search_candidates`·`search`, `api/rag_search.py`·`api/rag_hybrid.py`·`api/rag_vector.py` | 검색 전·후 현재 DB의 열람 범위·원문 확인, evidence 필드 형식, [벡터 검색 계약](specs/rag-vector.md) |
+| 답변 생성(LLM 공급자) | `api/llm.py`, `api/config.py`, `api/store/answers.py`의 `mode=llm` 분기 | [공급자 계약](specs/llm-provider.md), 문장·표의 `chunkId`·`quote` 인용 검증, 입력 바이트·시간 예산 |
+| 표·차트 표현 | `api/answer_presentation.py`, `frontend/src/components/answer-presentation.jsx` | [표현 계약](specs/answer-presentation.md), 원문 인용·실제 조회 수치·전체/표시 개수 구분 |
 | 의도 분류·Agent | `api/store/answers.py`의 `answer` | [`specs/integrated-answer.md`](specs/integrated-answer.md) 출력 형식 |
 | 계산 Tool 추가 | `api/store/tools.py`(`TOOL_DEFINITIONS`, 계산 메서드), `api/routes/system.py`(경로) | 입력 검증, `version`·`assumptions` 반환, `tool_runs` 기록 |
 | 보고서 서식 | `api/store/reports.py`의 `generate_report` | 없는 값은 `[미입력 · 확인 필요]` |
@@ -180,6 +195,7 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 | `backend/.venv/` | `uv sync` (`backend/`) | 제외 |
 | `frontend/.next/`, `frontend/.next-dev/` | `npm run build`, `npm run dev` | 제외 |
 | 볼륨 `haedap_db-data`, `haedap_backups` | `docker compose up` | — (`docker compose down -v`로 삭제됨) |
+| 볼륨 `haedap_rag-vectors`, 이미지 `/opt/models/e5-small` | Chroma 실행·backend 이미지 빌드 | 파생 벡터 색인과 고정 로컬 모델. Git 원본 데이터가 아니며 PostgreSQL 자료로 색인 재구축 가능 |
 | `backend/data/` | 직접 실행 시 백업(`data/backups/`) | 제외 |
 | `e2e/test-results/`, `e2e/playwright-report/` | e2e 실행 | 제외 |
 | `schema_migrations` 테이블 | dbmate (적용한 마이그레이션 버전) | — |
@@ -187,8 +203,8 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 
 ## 7. 알려진 한계
 
-- 문서 청크를 요청마다 읽고 권한 필터 후 메모리 BM25 인덱스를 만드는 캡스톤 데모 규모 설계. 대규모 운영에는 인덱스 재사용·페이징·파일 저장소·TLS·로그 보존 정책이 필요.
-- 검색은 Kiwi 한국어 형태소·영숫자·제한된 해사 별칭·불용어 기반이다. 한글 bigram은 제거했다. 분석기와 동일 내용 청크의 분석 토큰을 프로세스 단위로 재사용한다. 토큰 캐시는 SHA-256 키·불변 튜플만 보관하며 최대 2,048항목·계산 객체 크기 합 16MiB의 LRU로 제한한다. 현재 DB에서 확인한 권한·선택 문서·활성 개정 후보만 검색에 참여하고 BM25 인덱스는 매 요청 새로 만든다. 결과·원문·질의·권한 인덱스는 캐시하지 않는다. 최초·변경·퇴출된 청크 분석과 큰 corpus의 인덱스 생성 비용은 남는다. 토큰 메모리 보관의 제한과 위험은 [ADR 0017 제안](adr/0017-bounded-chunk-token-reuse.md)에 기록했다. 사전 밖 용어·다의어·영문 활용형·의미 검색에는 한계가 있다. 작은 corpus의 BM25 점수는 0 또는 음수일 수 있으며 확률이 아니다. 상세 규칙은 [검색 계약](specs/api.md#문서-검색-bm25)을 따른다.
+- BM25 분기는 문서 청크를 요청마다 읽고 권한 필터 후 메모리 인덱스를 만드는 캡스톤 데모 규모 설계다. 벡터 색인은 별도로 유지하지만 전체 검색에는 현재 DB 후보 확인과 BM25 비용이 남는다. 대규모 운영에는 인덱스 재사용·페이징·파일 저장소·TLS·로그 보존 정책이 필요하다.
+- BM25 분석은 Kiwi 한국어 형태소·영숫자·제한된 해사 별칭·불용어 기반이다. 한글 bigram은 제거했다. 분석기와 동일 내용 청크의 분석 토큰을 프로세스 단위로 재사용한다. 토큰 캐시는 SHA-256 키·불변 튜플만 보관하며 최대 2,048항목·계산 객체 크기 합 16MiB의 LRU로 제한한다. 현재 DB에서 확인한 권한·선택 문서·활성 개정 후보만 검색에 참여하고 BM25 인덱스는 매 요청 새로 만든다. 이 토큰 캐시는 결과·원문·질의·권한 인덱스를 보관하지 않는다. 최초·변경·퇴출된 청크 분석과 큰 corpus의 인덱스 생성 비용은 남는다. 토큰 메모리 보관의 제한과 위험은 [ADR 0017 제안](adr/0017-bounded-chunk-token-reuse.md)에 기록했다. BM25만으로는 사전 밖 용어·다의어·영문 활용형·의미 검색에 한계가 있다. 작은 corpus의 BM25 점수는 0 또는 음수일 수 있으며 확률이 아니다. 상세 규칙은 [검색 계약](specs/api.md#문서-검색-bm25)을 따른다. 벡터 분기는 고정 모델·입력 길이·색인 동기화 상태의 제약을 받으며 준비 실패 시 BM25로 대체한다.
 - 관리자 세션은 backend 프로세스 메모리에 있어 backend를 여러 개 띄우면 공유되지 않음.
 - 질문 유형 분기는 단어 규칙 기반. 질문 속 날짜·선박명 자동 추출은 미구현.
 
@@ -231,7 +247,7 @@ Chroma 서버는 Docker 내부 전용이며 자동 worker와 함께 기본 실�
 CPU PyTorch·E5 실행·Python 클라이언트는 backend/worker에 있다. 모델은 이미지 `/opt/models/e5-small`, 벡터는 named volume이다.
 PostgreSQL만 원본이므로 Chroma 결과의 본문을 신뢰하지 않고 현재 후보 행으로 결과를 구성한다.
 BM25는 제한된 분석 토큰 캐시를 사용한다. CLI에서 명시적으로 BM25만 실행하면 E5/Chroma를 로딩하지 않는다.
-상세 실패·부분 색인·동기화 정책은 [검색 계약](specs/rag-vector.md), 현재 선택 이유는 [ADR 0021](adr/0021-durable-index-jobs.md) 참고.
+상세 실패·부분 색인·동기화 정책은 [검색 계약](specs/rag-vector.md), 로컬 벡터 선택 이유는 [ADR 0019](adr/0019-local-vector-retrieval.md), 자동 색인 결정은 [ADR 0021](adr/0021-durable-index-jobs.md)을 참고한다.
 
 ### 자동 색인 경계
 

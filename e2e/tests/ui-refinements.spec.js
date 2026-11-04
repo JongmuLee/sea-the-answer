@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 async function mockWorkspace(page, admin = false) {
   const state = {
     admin, loggedIn: true, deleteError: false, deleteCalls: [], history: [], waitForAnswer: null,
-    waitForOperations: null, generationCalls: [],
+    waitForOperations: null, generationCalls: [], answerPatch: null,
     reports: [{ id: 'report-1', title: '삭제 검증 보고서', type: '규정 검토', text: '보존할 보고서 본문',
       sources: [], version: 3, status: 'draft', owner: 'crew_3edf36ec', body: {}, updatedAt: '2026-10-18' }],
   };
@@ -58,6 +58,7 @@ async function mockWorkspace(page, admin = false) {
       if (state.waitForAnswer) await state.waitForAnswer();
       const answer = { id: 'answer-1', question, language: 'ko', generation: 'extractive', status: 'insufficient_evidence',
         notice: '검증 응답', warnings: [], statements: [], evidence: [], toolRuns: [] };
+      if (state.answerPatch) Object.assign(answer, state.answerPatch);
       state.history = [{ id: answer.id, question, answer, at: '2026-10-18T00:00:00Z' }];
       return json(answer);
     }
@@ -237,5 +238,107 @@ test('mobile brand and report actions remain visible without page overflow', asy
   await action(page, 'home').focus(); await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/chat$/);
   await expect(page.locator('.sidebar')).not.toHaveClass(/\bopen\b/);
+  expect(state.errors).toEqual([]);
+});
+
+test('requested document table displays escaped cells and opens the cited original', async ({ page }) => {
+  const state = await mockWorkspace(page);
+  const source = 'ECA 밖의 황 한도는 0.50%이고 ECA 안은 0.10%입니다.';
+  state.answerPatch = {
+    status: 'evidence_found', statements: [{ text: '황 한도를 비교했습니다.', chunkId: 'chunk-1', quote: source }],
+    evidence: [{ id: 'chunk-1', document_id: 'manual-1', title: '검증 문서', page: 1, text: source }],
+    presentation: { type: 'table', source: 'documents', title: '해역별 황 한도', columns: ['해역', '황 한도'],
+      rows: [{ cells: ['ECA 밖', '0.50%'], citations: [{ chunkId: 'chunk-1', quote: source }] },
+        { cells: ['<img src=x onerror="window.injected=true">', '0.10%'],
+          citations: [{ chunkId: 'chunk-1', quote: source }] }], truncated: false, totalRows: 2 },
+  };
+  await page.goto('/chat');
+  await ask(page, 'ECA 안과 밖의 황 한도를 표로 보여줘');
+  const table = page.getByRole('table', { name: '해역별 황 한도', exact: true });
+  await expect(table).toBeVisible();
+  await expect(table.getByRole('columnheader', { name: '황 한도', exact: true })).toBeVisible();
+  await expect(table.getByRole('cell', { name: '0.50%', exact: true })).toBeVisible();
+  await expect(table.getByRole('cell', { name: '<img src=x onerror="window.injected=true">', exact: true })).toBeVisible();
+  await expect(table.locator('img')).toHaveCount(0);
+  expect(await page.evaluate(() => window.injected)).toBeUndefined();
+  await table.locator('[data-action="source"]').first().click();
+  await expect(page.locator('.modal-body .quote')).toHaveText(source);
+  expect(state.errors).toEqual([]);
+});
+
+test('requested line and bar charts show axis units and accessible data tables on mobile', async ({ page }) => {
+  const state = await mockWorkspace(page);
+  state.answerPatch = { status: 'data_found', presentation: { type: 'chart', source: 'operations',
+    chartType: 'bar', title: '일별 CO₂', xLabel: '일자', yLabel: 'CO₂', unit: 't CO₂',
+    points: [{ label: '2026-09-25', value: 31.14 }, { label: '2026-09-26', value: 0 }],
+    truncated: true, totalPoints: 101 }, presentationNotice: '전체 101개 중 2개 지점을 표시합니다.' };
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/chat');
+  await ask(page, '선박의 일별 CO₂ 배출을 막대그래프로 보여줘');
+  const chart = page.locator('.answer-presentation svg');
+  await expect(chart).toBeVisible();
+  await expect(chart.getByText('CO₂ (t CO₂)', { exact: true })).toBeVisible();
+  await expect(chart.getByText('일자', { exact: true })).toBeVisible();
+  await expect(chart.locator('rect')).toHaveCount(2);
+  await expect(page.locator('.answer-presentation')).toContainText('전체 101개 중 2개');
+  await page.getByText('차트 데이터 표 보기', { exact: true }).click();
+  const table = page.getByRole('table', { name: '일별 CO₂ 데이터', exact: true });
+  await expect(table).toBeVisible();
+  await expect(table.getByRole('cell', { name: '31.14', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  state.answerPatch.presentation.chartType = 'line';
+  state.answerPatch.presentation.truncated = false;
+  state.answerPatch.presentation.totalPoints = 2;
+  state.answerPatch.presentationNotice = null;
+  await ask(page, '같은 자료를 선 그래프로 보여줘');
+  await expect(chart.locator('polyline')).toHaveCount(1);
+  await expect(chart.locator('circle')).toHaveCount(2);
+  expect(state.errors).toEqual([]);
+});
+
+test('unavailable or malformed presentation retains the answer without executing markup', async ({ page }) => {
+  const state = await mockWorkspace(page);
+  const source = '검증 가능한 원문 근거의 내용입니다.';
+  state.answerPatch = { status: 'evidence_found',
+    statements: [{ text: '보존해야 하는 본문 답변입니다.', chunkId: 'chunk-1', quote: source }],
+    evidence: [{ id: 'chunk-1', document_id: 'manual-1', title: '검증 문서', text: source, page: 1 }],
+    presentationNotice: '요청한 그림은 생성하지 못했습니다. 원문 PDF를 확인해 주세요.' };
+  await page.goto('/chat');
+  await ask(page, '원문의 그림을 보여줘');
+  await expect(page.locator('.answer')).toContainText('보존해야 하는 본문 답변입니다.');
+  await expect(page.locator('.answer-presentation')).toContainText('원문 PDF를 확인해 주세요.');
+  state.answerPatch.presentationNotice = null;
+  state.answerPatch.presentation = { type: 'chart', source: 'operations', chartType: 'line', title: '무효 수치',
+    xLabel: '일자', yLabel: '연료', unit: 't', points: [{ label: '오늘', value: 'not-a-number' }],
+    truncated: false, totalPoints: 1 };
+  await ask(page, '무효 자료를 그래프로 보여줘');
+  await expect(page.locator('.answer-presentation svg')).toHaveCount(0);
+  await expect(page.locator('.answer-presentation')).toContainText('본문 답변을 표시합니다.');
+  await expect(page.locator('.answer')).toContainText('보존해야 하는 본문 답변입니다.');
+  expect(state.errors).toEqual([]);
+});
+
+test('operation preview labels partial rows while preserving full aggregate totals', async ({ page }) => {
+  const state = await mockWorkspace(page);
+  const rows = Array.from({ length: 200 }, (_, index) => ({
+    id: `preview-${index}`, ship: 'ship-1',
+    date: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
+    fuel: 10, factor: 3.114, distance: 100, speed: 10,
+  }));
+  state.answerPatch = { status: 'data_found', operations: {
+    ship: { id: 'ship-1', name: '검증 선박', dwt: 1000 }, from: '2026-01-01', to: '2026-12-31',
+    count: 1000, totalRows: 1000, rowsTruncated: true, rows,
+    fuel: 50000, emission: 155700, distance: 100000, sample: false,
+  } };
+  await page.goto('/chat');
+  await ask(page, '선박의 전체 운항 기록을 요약해줘');
+  const result = page.locator('.integrated-result');
+  await expect(result).toContainText('1000개 기록');
+  await expect(result).toContainText('총 1,000건으로 집계했으며, 아래 그래프·표는 처음 200건만 표시합니다.');
+  await expect(result.locator('.stat-value').first()).toContainText('50,000.0');
+  await expect(result.locator('svg.chart circle')).toHaveCount(200);
+  await result.getByText('표시한 기록 보기 (200 / 1,000건)', { exact: true }).click();
+  await expect(result.locator('table tbody tr')).toHaveCount(200);
+  await expect(result.getByText('계산에 사용한 기록 보기', { exact: true })).toHaveCount(0);
   expect(state.errors).toEqual([]);
 });

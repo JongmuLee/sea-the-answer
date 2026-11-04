@@ -121,7 +121,7 @@ erDiagram
 | 테이블 | 컬럼 | 설명 |
 |---|---|---|
 | `users` | `id`, `username`(UNIQUE), `name`, `role`, `password`(`salt:scrypt hex`), `active`, `version`, `must_change_password`(boolean, 기본 true) | `role`: `admin`(관리자) · `operator`(선원) · `viewer`(열람); 활성 계정만 로그인. 비밀번호 초기화 후 본인 변경 필수 |
-| `queries` | `id`, `question`, `response`(통합 답변 JSON 전체), `created_at` | 질문 당시 답변 재열람용 |
+| `queries` | `id`, `question`, `response`(통합 답변 JSON 전체), `created_at` | 질문 당시 답변 재열람용. 선택적 표·차트/입력·시간 통계와 운항 미리보기는 [표현 계약](specs/answer-presentation.md)을 따르며 이전 JSON에는 해당 필드가 없어도 된다. |
 | `query_owner` | `id`, `owner` | 질문 소유자 |
 | `tool_runs` | `id`, `tool`, `version`, `input`, `output`, `created_at` | 계산 도구 실행 기록 |
 | `changes` | `id`, `at`, `actor`, `kind`, `payload`, `status`, `reviewer`, `reviewed_at`, `note` | 변경·승인 이력 |

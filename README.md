@@ -1,6 +1,6 @@
 # 해답 — SEA THE ANSWER
 
-현재 버전 **1.4.0** · 마지막 업데이트 **2026-10-29**
+현재 버전 **1.4.0** · 마지막 업데이트 **2026-11-03**
 
 선내 문서 근거와 운항 기록을 함께 보여 주는 선박 업무 지원 앱입니다. 화면은 Next.js, `/api/*`는 Python FastAPI, 저장소는 PostgreSQL이며, 저장소 최상위에서 `docker compose` 하나로 셋을 함께 실행합니다.
 
@@ -198,6 +198,33 @@ uv run --project backend python scripts/evaluate_llm.py --mode llm --output .ver
 `--case sulphur-limits --case english-lookout-korean-answer`를 붙이면 일부 사례만 실행합니다. 출력 파일은 새 이름을 사용하세요. 기존 파일은 덮어쓰지 않습니다. 결과의 `execution=real_model`, 사례별 `outcome`·`duration_seconds`·`citation_valid`와 기대 답변 요지를 확인합니다. 모델 요청·응답 검증 오류는 결과에 남기고 종료 코드 1을 반환합니다. 설정·자료·출력 경로 오류도 코드 1이며, 정상적인 근거 부족 응답은 실행 오류가 아닙니다.
 
 한글 포함·원문 인용 일치는 의미적 정답이나 한국어 품질 합격을 뜻하지 않습니다. `semantic_review=pending`인 답변은 사람이 근거와 대조해야 합니다. 이 평가는 검색·권한·Docker·브라우저 검증을 포함하지 않습니다. 상세 [평가 계약](docs/specs/llm-provider.md#7-한국어-생성고정-근거-평가-계약-2026-10-28-확정), [실제 검증 기록](docs/changelog.md)을 참고하세요.
+
+저장된 평가에서 원문 문맥과 기대 사실을 함께 보는 사람 검토표를 만들 수 있습니다. 아래 명령은 모델·DB를 호출하지 않습니다. `korean-model.json`은 위 실제 모델 평가에서 생성한 파일이며, 도구 동작만 확인하려면 앞서 생성한 `korean-extractive.json`을 사용하세요.
+
+```powershell
+uv run --project backend python scripts/review_llm.py prepare --report .verification/korean-model.json --output .verification/korean-review.json
+# korean-review.json의 각 cases 항목에서 verdict, reviewer, reviewed_at, notes만 편집
+uv run --project backend python scripts/review_llm.py summarize --report .verification/korean-model.json --review .verification/korean-review.json --output .verification/korean-summary.json
+```
+
+각 사례의 `input.expected.facts`·`input.evidence`를 `result.statements`와 대조합니다. 수치·단위·조건과 누락·모순, 한국어 설명의 이해 가능성, 근거 부족 판단을 확인해 `verdict`를 `pending`에서 `pass` 또는 `fail`로 바꾸고, `reviewer`(검토자)·`reviewed_at`(`2026-11-03` 같은 ISO 날짜)·`notes`(판정 근거)를 채우세요. 아직 판단할 수 없으면 `pending`을 유지합니다. 나머지 원본·문맥·해시는 편집하지 않습니다.
+
+요약의 `status`는 실제 모델 결과에서 `pass`/`fail`/`pending`이며, 발췌 실행은 항상 `extractive`로 구분합니다. 모델 실행 오류는 합격으로 기록할 수 없고, 미검토가 남으면 전체 합격이 되지 않습니다. 종료 코드 0은 요약 처리 성공으로, 품질 합격 여부는 JSON의 `status`를 확인하세요. 원본 평가 파일을 다시 저장해 바이트가 바뀌거나 고정 입력이 달라지면 무결성 오류로 종료 코드 1을 반환합니다. 과거 자료는 `prepare --cases <과거-평가셋.json> --seed <과거-seed.json>`으로 지정할 수 있고, 한 번 만든 검토표의 요약은 저장된 문맥을 사용합니다. 새 출력 경로를 사용하세요. 상세 [사람 검토 계약](docs/specs/llm-provider.md#저장된-평가의-사람-검토-cli-2026-11-03-확정).
+
+### 표·차트 답변과 입력량 검증
+
+통합 질문에서 `GT와 DWT 차이를 표로 정리해줘`처럼 요청하면 행별 원문 근거를 가진 표를 표시합니다. AI 모드에서 표를 생성하지 못하면 원문 발췌 표와 안내를 표시합니다. 선박·기간과 운항 분석을 선택하고 `CO₂ 배출량을 막대그래프로 보여줘` 또는 `연료 사용량 추이를 그래프로 보여줘`라고 요청하면 실제 저장된 기록의 차트를 표시합니다. 차트의 축·단위·정확한 값은 데이터 표에서 확인합니다. 새 그림 생성과 PDF 그림 자동 추출은 지원하지 않으며 원문 그림은 PDF 열람을 사용합니다.
+
+많은 자료는 전체 집계와 표시 범위를 구분합니다. 요청 표는 최대 50행, 차트는 100점, 운항 요약의 원본 기록 미리보기는 200건입니다. 문서 근거를 생성 입력에 모두 넣지 못했거나 남은 생성 시간이 부족하면 안내와 원문 발췌로 전환합니다. 자세한 [지원 범위와 계약](docs/specs/answer-presentation.md)을 참고하세요.
+
+입력량별 진단 명령은 저장소 최상위에서 실행합니다. 기본은 실제 seed 절을 추가하는 오프라인 발췌 시험이며 실제 문서 검색 규모 시험과 구분합니다. 실제 모델은 앞 절의 프로세스 모델 설정 후 `--mode llm`을 명시합니다. 새 출력 파일명을 사용하세요.
+
+```powershell
+uv run --project backend python scripts/evaluate_llm_load.py --output .verification/llm-load-offline.json
+uv run --project backend python scripts/evaluate_llm_load.py --mode llm --case sulphur-limits --scenario one --scenario five --scenario five-long --output .verification/llm-load-model.json
+```
+
+결과에서 공급/선택 근거 수·바이트·생략된 ID·정답 근거 포함 여부, 실행 시간과 오류를 확인합니다. 바이트는 토큰 수가 아니며, 인용 검사 통과를 의미 정답으로 집계하지 않습니다. API의 단계별 계산 시간과 클라이언트가 측정한 전체 응답 시간도 구분합니다.
 
 ## 설정 (`.env`)
 

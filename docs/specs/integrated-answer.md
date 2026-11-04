@@ -10,6 +10,8 @@
 
 ## 2. 요청
 
+표·차트 요청의 `outputFormat`, 응답 `presentation`·`presentationNotice`·`generationStats`·`timings`, 운항 기록 미리보기는 [표현·입력량 추가 계약](answer-presentation.md)을 따른다. 기존 필드와 인용·권한 경계는 유지한다.
+
 ```json
 {
   "question": "선택 선박의 운항 현황과 관련 규정을 확인해줘",

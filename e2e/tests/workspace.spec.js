@@ -164,6 +164,78 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     expect(await records()).toHaveLength(21);
   });
 
+  await test.step('Natural-language table and chart requests use real document and operation data', async () => {
+    await go('chat');
+    await page.locator('[data-field=task]').selectOption('documents');
+    await page.locator('#question').fill('연료 황 함유량 한도를 표로 보여줘');
+    const tableResponse = page.waitForResponse(
+      response => new URL(response.url()).pathname === '/api/ask' && response.request().method() === 'POST',
+      { timeout: 60_000 },
+    );
+    await submit('#askForm');
+    const tableResult = await tableResponse;
+    expect(tableResult.ok()).toBe(true);
+    // No outputFormat shortcut: the server must recognize the question's table request.
+    expect(tableResult.request().postDataJSON().outputFormat).toBeUndefined();
+    const documentAnswer = await tableResult.json();
+    expect(documentAnswer.presentation.type).toBe('table');
+    expect(documentAnswer.presentation.source).toBe('documents');
+    expect(documentAnswer.generation).toBe('extractive'); // This stack intentionally has no real LLM.
+    const documentTable = page.getByRole('table', { name: documentAnswer.presentation.title, exact: true });
+    await expect(documentTable).toBeVisible();
+    await expect(documentTable).toContainText('0.50%');
+    const citation = documentAnswer.presentation.rows[0].citations[0];
+    const source = documentAnswer.evidence.find(item => item.id === citation.chunkId);
+    expect(source.text).toContain(citation.quote);
+    await documentTable.locator('[data-action=source]').first().click();
+    await expect(page.locator('.modal-body .quote')).toHaveText(source.text);
+    await close();
+    await dialogClosed();
+
+    const operations = (await api('/api/operations')).data;
+    const ship = operations.ships.find(item => operations.records.some(row => row.ship === item.id));
+    const rows = operations.records.filter(row => row.ship === ship.id).sort((a, b) => a.date.localeCompare(b.date));
+    expect(rows.length).toBeGreaterThan(0);
+    await page.locator('.query-context').evaluate(details => { details.open = true; });
+    await page.locator('.query-context #ship').selectOption(ship.id);
+    await page.locator('.query-context #from').fill(rows[0].date);
+    await page.locator('.query-context #to').fill(rows.at(-1).date);
+    await page.locator('[data-field=task]').selectOption('operations');
+    await page.locator('#question').fill('선택 선박의 일별 CO₂ 배출량을 막대그래프로 보여줘');
+    const chartResponse = page.waitForResponse(
+      response => new URL(response.url()).pathname === '/api/ask' && response.request().method() === 'POST',
+      { timeout: 60_000 },
+    );
+    await submit('#askForm');
+    const chartResult = await chartResponse;
+    expect(chartResult.ok()).toBe(true);
+    const operationAnswer = await chartResult.json(), presentation = operationAnswer.presentation;
+    expect(presentation.type).toBe('chart');
+    expect(presentation.chartType).toBe('bar');
+    expect(presentation.source).toBe('operations');
+    expect(operationAnswer.operations.ship.id).toBe(ship.id);
+    expect(presentation.points).toHaveLength(rows.length);
+    for (const point of presentation.points) {
+      const record = rows.find(row => row.date === point.label);
+      expect(record).toBeTruthy();
+      expect(point.value).toBeCloseTo(record.fuel * record.factor, 6);
+    }
+    const chart = page.locator('.answer-presentation svg');
+    await expect(chart).toBeVisible();
+    await expect(chart.getByText(presentation.xLabel, { exact: true })).toBeVisible();
+    await expect(chart.getByText(`${presentation.yLabel} (${presentation.unit})`, { exact: true })).toBeVisible();
+    await expect(chart.locator('rect')).toHaveCount(rows.length);
+    await page.getByText('차트 데이터 표 보기', { exact: true }).click();
+    const dataTable = page.getByRole('table', { name: `${presentation.title} 데이터`, exact: true });
+    await expect(dataTable).toBeVisible();
+    const firstPoint = presentation.points[0];
+    const firstRow = dataTable.getByRole('row').filter({ hasText: firstPoint.label });
+    await expect(firstRow.getByRole('cell', {
+      name: firstPoint.value.toLocaleString('ko-KR', { maximumFractionDigits: 6 }), exact: true,
+    })).toBeVisible();
+    await page.locator('[data-field=task]').selectOption('auto');
+  });
+
   await test.step('Document create, revision and immediate deletion', async () => {
     await go('docs');
     await action('newDocument').click();
@@ -385,7 +457,12 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     const restore = page.locator(`[data-action=restoreBackup][data-id="${backup.id}"]`);
     await restore.click();
     await page.locator('#f-confirm').fill('복구');
+    const restoreResponse = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/backups/restore' && response.request().method() === 'POST');
     await submit('#restoreForm');
+    const restored = await restoreResponse;
+    const restoreResult = await restored.json();
+    expect(restored.status(), JSON.stringify(restoreResult.error || {})).toBe(200);
     await page.locator('#authForm').waitFor();
     expect((await api('/api/health')).data.user.role).toBe('guest');
     expect((await api('/api/operations')).status).toBe(401);

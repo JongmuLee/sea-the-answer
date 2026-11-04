@@ -34,6 +34,7 @@
 
 ### specs — 구현 계약
 
+- [표·차트와 입력량·시간](specs/answer-presentation.md) — 구현됨
 - [선원·관리자 인증](specs/authentication.md) — 구현됨
 - [업무 스킬 실행 계약](specs/workflow-skills.md): 여섯 스킬, 선택 문서·매핑·권한·초안·평가 범위.
 
@@ -46,6 +47,9 @@
 | [`specs/prepare-data.md`](specs/prepare-data.md) — 데이터 선택·출처·품질·집계 적격성 계약 | 구현됨 |
 
 ### plans — 작업 계획
+
+- [교수 피드백: 표·차트와 입력량 검증](plans/2026-11-03-answer-presentation-and-load-validation.md) — 완료
+- [한국어 평가 사람 검토](plans/2026-11-03-korean-llm-human-review.md) — 완료
 
 - [웹 하이브리드 검색 통일](plans/2026-10-29-web-hybrid-search.md): 완료.
 
