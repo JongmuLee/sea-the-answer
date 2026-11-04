@@ -407,6 +407,10 @@ export function createWorkspace() {
     try {
       const answer = await api.ask(body);
       if (sequence !== state.askSequence) return;
+      const resolvedShip = answer.navigation?.ship?.id;
+      if (resolvedShip && state.ship === body.context.ship && state.ships.some(s => s.id === resolvedShip)) {
+        state.ship = resolvedShip;
+      }
       state.answer = answer;
       if (state.question.trim() === q) state.question = '';
     } catch (e) {

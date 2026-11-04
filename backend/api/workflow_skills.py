@@ -474,48 +474,23 @@ def run(db, user, payload):
                 ReferenceIntensityRequest,
                 calculate_reference,
             )
-            from sqlalchemy import text
             from sqlalchemy.exc import SQLAlchemyError
+            from .maritime_context import resolve_real_ship
 
             engine = None
             try:
                 engine = create_engine_for(url)
-                with engine.connect() as conn, conn.begin():
-                    conn.execute(text("SET TRANSACTION READ ONLY"))
-                    conn.execute(text("SET LOCAL statement_timeout='5s'"))
-                    candidates = (
-                        conn.execute(
-                            text(
-                                "SELECT vessel_id,imo_number FROM maritime_data.vessels WHERE ship_id=:ship AND data_origin='REAL'"
-                            ),
-                            {"ship": body.context.ship},
-                        )
-                        .mappings()
-                        .all()
-                    )
-                if len(candidates) != 1:
+                resolved = resolve_real_ship(db, engine, body.context.ship)
+                if resolved.vessel_id is None:
                     answer.update(
                         status="needs_input",
                         notice="이 앱 선박과 실제 MRV 선박의 명시적 연결이 필요합니다.",
                     )
                 else:
-                    app_ship = db.one(
-                        "SELECT body FROM ships WHERE id=%s", (body.context.ship,)
-                    )["body"]
-                    imo = re.sub(
-                        r"^IMO\s*", "", str(app_ship.get("imo", "")).strip(), flags=re.I
-                    )
-                    require(
-                        not app_ship.get("sample")
-                        and imo == candidates[0]["imo_number"],
-                        "앱 선박과 MRV 선박의 정체성이 일치하지 않습니다. 연결을 검토해 주세요.",
-                        "MARITIME_SHIP_IDENTITY_CONFLICT",
-                        409,
-                    )
                     request = ReferenceIntensityRequest(
                         scope={
                             "dataset": "real_annual",
-                            "vessel_id": candidates[0]["vessel_id"],
+                            "vessel_id": resolved.vessel_id,
                             "year": body.year,
                         },
                         accept_reference_limitations=True,

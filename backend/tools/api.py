@@ -16,6 +16,8 @@ from sqlalchemy import create_engine
 
 from . import query as maritime_data, agent as maritime_data_agent, calculations as maritime_data_calculations
 from .reference_intensity import ReferenceIntensityRequest, calculate_reference
+from .navigation_references import (NavigationScreenRequest, load_catalog,
+                                    catalog_summary, screen_from_database)
 
 logger = logging.getLogger('maritime_data.audit')
 bearer = HTTPBearer(auto_error=False)
@@ -67,6 +69,18 @@ def create_router(engine, token):
     def reference_intensity(body: ReferenceIntensityRequest):
         result = calculate_reference(engine, body)
         logger.info('maritime_data.reference_intensity status=%s', result['status'])
+        return result
+
+    @router.get('/api/maritime-data/port-reference-catalog', dependencies=[Depends(authorize)])
+    def port_reference_catalog():
+        catalog, sha256 = load_catalog(os.getenv('MARITIME_PORT_REFERENCES_PATH'))
+        return catalog_summary(catalog, sha256)
+
+    @router.post('/api/maritime-data/port-reference-screen', dependencies=[Depends(authorize)])
+    def port_reference_screen(body: NavigationScreenRequest):
+        catalog, sha256 = load_catalog(os.getenv('MARITIME_PORT_REFERENCES_PATH'))
+        result = screen_from_database(engine, body, catalog, sha256)
+        logger.info('maritime_data.port_reference_screen berth_count=%s', len(result['berths']))
         return result
 
     return router

@@ -1,6 +1,14 @@
 # 데이터 모델
 
+## 외부 선석 참조 snapshot (2026-11-04)
+
+새 DB 테이블을 만들지 않는다. 준비한 `catalog.json`은 실제 MRV IMO와 공개 AIS metadata의 교집합, 선석별 게시 제한·조건·중복 변형, 출처 SHA256·수집 시각을 보관하는 별도 읽기 전용 참조 파일이다. 형식·수량 단위·노후화 정책은 [선석 참조 계약](specs/port-references.md)에 정의한다. API는 현재 `maritime_data.vessels`의 REAL ID를 확인하지만 AIS 순간값을 연간 보고 값에 채우거나 기존 계정·운항·제원 테이블을 갱신하지 않는다. 이 외부 파일은 앱 JSON 백업에 포함되지 않으므로 원본·manifest·준비 절차와 함께 별도 보존/배포해야 한다. 복구 후에도 자료의 경과 시간은 요청 시 다시 검사한다.
+
 > 대상: 기본 앱 1.4.0 + 선택 해사 데이터 Tool 계약 v1 · 최종 확인: 2026-10-15 (`migrations/`, `backend/api/store/`, `api/workflow_skills.py`, `scripts/` 대조)
+
+참조 snapshot 1.1은 항구별 `source_id`·`reference_scope`를 추가하고 source variants의 조건/위치와 최종 제한값 일치를 검사한다. 오프라인 묶음은 catalog·SHA256 manifest·출처 안내로 구성하며 이전 catalog는 해시 이름의 별도 파일로 보존한다. 이 확장은 PostgreSQL 테이블·운항 JSON 필드·기존 MRV 행을 바꾸지 않고 앱 JSON 백업에도 포함되지 않는다. [필드·오프라인 계약](specs/port-references.md)을 따른다.
+
+통합 질문에서 만든 항구 참조 답변은 기존 `queries.response` JSON의 `navigation`에 저장하고 `query_owner`로 사용자에게 연결한다. `generation=tool`, `task=navigation`, `reference_only=true`, `admission=not_assessed`와 선택 선박·매핑 문맥·항구별 건수·상세 수치·출처/시점·부족 사유를 보존한다. `evidence`·`statements`·`toolRuns`는 빈 배열이며 외부 항만 URL을 등록 문서 인용이나 CO₂ 실행 기록으로 만들지 않는다. Query 감사 기록과 소유자별 이력을 재사용하므로 추가 migration은 없다. 저장된 결과는 당시 수집본·비교 시점의 기록이며 현재 입항 허가로 갱신되는 값이 아니다.
 > 테이블·필드·상태 값을 바꾸면 같은 작업에서 이 문서를 고치고, 되돌리기 어려운 변경이면 ADR을 남깁니다.
 
 > 문서 전처리 통합은 `migrations/`의 PostgreSQL 테이블/컬럼을 바꾸지 않는다. `chunks.document_id`로 문서 제목을, `chunk_pages.id`로 물리 페이지를 조회한다. 기존 `haedap-chunk-v1` 문서 해시와 청크 ID를 유지하고 기존 개정본의 청크는 재작성하지 않는다. 새 문서·새 내용 개정의 분할 규칙만 [전처리 계약](specs/api.md#python-문서-전처리-계약-2026-10-13-확정)에 따라 달라진다.

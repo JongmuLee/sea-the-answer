@@ -8,6 +8,7 @@ from fastapi import Response
 
 from ..errors import ApiError, require
 from ..web import security
+from ..navigation_query import try_answer as navigation_answer
 
 
 def documents(ctx):
@@ -32,7 +33,9 @@ def history(ctx):
 
 def ask(ctx):
     db, user = ctx.db, ctx.user
-    answer = db.answer(user, ctx.body)
+    answer = navigation_answer(ctx)
+    if answer is None:
+        answer = db.answer(user, ctx.body)
     require(security.current_user(db, ctx.request, ctx.guest)["id"] == user["id"],
             "사용자 상태가 바뀌었습니다. 다시 연결해 주세요.", "AUTH_REQUIRED", 401)
     require(all(db.can_read_document(user, item["document_id"]) for item in answer["evidence"]),

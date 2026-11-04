@@ -1,0 +1,23 @@
+.root table { width: 100%; min-width: 0; }
+.root td { white-space: normal; overflow-wrap: anywhere; }
+.root summary { cursor: pointer; overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+  .root table, .root tbody { display: block; }
+  /* Keep column headings available to assistive technology. Visible labels are
+     repeated beside the values when rows become cards. */
+  .root thead { position: absolute; width: 1px; height: 1px; padding: 0;
+    margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .summary tbody { display: grid; gap: 12px; }
+  .summary tr { display: grid; grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .summary th { grid-column: 1 / -1; }
+  .summary td::before { content: attr(data-label); display: block;
+    color: var(--muted); font-size: 12px; }
+  .summary th, .summary td { display: block; padding: 10px; min-width: 0; }
+  .berths tr, .berths th, .berths td { display: block; width: auto;
+    position: static; white-space: normal; padding: 10px; }
+  .berths tr { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .berths th, .berths td { border: 0; }
+  .berths td p { margin: 0 0 12px; }
+}
