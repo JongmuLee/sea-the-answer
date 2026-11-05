@@ -35,6 +35,8 @@
 ### specs — 구현 계약
 
 - [표·차트와 입력량·시간](specs/answer-presentation.md) — 구현됨
+- [AIS·선석 참조 API](specs/port-references.md) — 기존 질문창·상세 화면의 다중 항구 부분 비교, 오프라인 배포.
+
 - [선원·관리자 인증](specs/authentication.md) — 구현됨
 - [업무 스킬 실행 계약](specs/workflow-skills.md): 여섯 스킬, 선택 문서·매핑·권한·초안·평가 범위.
 
@@ -56,6 +58,7 @@
 - [Chroma 서버 이미지 분리](plans/2026-10-29-chroma-image.md): 완료.
 
 - [벡터·RRF 구현](plans/2026-10-27-vector-hybrid.md): 완료. [계약](specs/rag-vector.md) 구현됨, 현재 결정은 [ADR 0021](adr/0021-durable-index-jobs.md) (0019·0020 계승).
+- [MRV 선박·항구 참조 연결 시범](plans/2026-11-04-port-reference-linkage.md) — 완료: 기존 질문창·다중 항구·실데이터·오프라인 배포·main 통합 검증, 운영 입항 판정 아님.
 
 - [한국어 근거 답변과 실제 모델 검증](plans/2026-10-28-korean-llm-validation.md) — 완료 (Docker e2e·모델 연결 검증, 일반 한국어 품질은 후속)
 - [해사 질문 검색 평가](plans/2026-10-28-maritime-retrieval-evaluation.md) — 초기 평가 완료

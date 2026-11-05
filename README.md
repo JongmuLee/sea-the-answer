@@ -1,6 +1,6 @@
 # 해답 — SEA THE ANSWER
 
-현재 버전 **1.4.0** · 마지막 업데이트 **2026-11-03**
+현재 버전 **1.4.0** · 마지막 업데이트 **2026-11-04** (항구 참조 로컬 추가 작업)
 
 선내 문서 근거와 운항 기록을 함께 보여 주는 선박 업무 지원 앱입니다. 화면은 Next.js, `/api/*`는 Python FastAPI, 저장소는 PostgreSQL이며, 저장소 최상위에서 `docker compose` 하나로 셋을 함께 실행합니다.
 
@@ -25,6 +25,7 @@
 sea-the-answer/
 ├─ compose.yaml          db + migrate + backend + frontend + rag-worker + chroma, profile "e2e"
 ├─ compose.dev.yaml      개발 오버레이: 소스 마운트, 핫 리로드, DB·API 포트를 127.0.0.1에 공개
+├─ compose.navigation.yaml 선택 기능: 설치된 항구 참조 디렉터리의 읽기 전용 연결
 ├─ .env.example          설정 예시 → .env 로 복사
 ├─ frontend/             Next.js 16 + React 19 — 사용자가 접속하는 유일한 진입점   [npm]
 │  ├─ package.json, package-lock.json, Dockerfile, next.config.mjs
@@ -50,6 +51,10 @@ sea-the-answer/
 
 해사 질문 평가셋으로 현재 검색을 측정하는 방법과 범위는 [검색 평가 안내](docs/retrieval-evaluation.md)를 참고하세요. 운영 DB·LLM 연결 없이 기본 문서 스냅샷으로 실행합니다.
 내용이 같은 문서 분석 토큰만 크기를 제한해 재사용합니다. 권한·선택 문서 확인과 검색 인덱스 생성은 매 요청 수행합니다. 상세 규칙은 [검색 계약](docs/specs/api.md#문서-검색-bm25)을 따릅니다.
+
+항구·선석 참조 비교는 선택 기능입니다. [자료 준비·오프라인 묶음 설치](docs/specs/port-references.md)를 마친 뒤 `.env`의 `MARITIME_PORT_REFERENCES_DIR`에 설치 디렉터리를 지정하고 `docker compose -f compose.yaml -f compose.navigation.yaml up --build -d`로 읽기 전용 연결합니다. 런타임 다운로드나 LLM은 필요하지 않습니다. 기존 선박 명시 매핑과 앱 로그인을 사용하며, 결과는 입항 허가가 아닌 공개 수치의 부분 비교입니다.
+
+준비 후 **통합 질문 → 작업 자동 선택**에서 “우리 배가 입항 가능한 항구가 어디야?”라고 질문하면 기존 선택 선박으로 제공 항구 전체를 비교합니다. IMO를 명시할 수도 있으며, 답변에서 항구별 건수·선석 수치·출처·부족 항목을 확인합니다. 운항 화면의 상세 비교 패널도 사용할 수 있습니다. [사용 방법과 한계](docs/user-guide.md#항구선석-참조-비교-선택-설정)를 확인하세요.
 
 ## 실행하기 (Docker)
 

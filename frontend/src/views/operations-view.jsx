@@ -1,5 +1,6 @@
 import React from 'react';
 import SkillsPanel from '../components/skills-panel';
+import PortReferencePanel from '../components/port-reference-panel';
 import * as helpers from '../components/common';
 export function createOperationsViews(model, views) {
   const noop = () => {};
@@ -561,7 +562,7 @@ export function createOperationsViews(model, views) {
         {state.tab !== 'calculation' && !state.ships.length
           ? empty(
               '첫 선박을 등록해 주세요',
-              '새로 등록한 기록은 SQLite에 저장됩니다.',
+              '새로 등록한 기록은 PostgreSQL에 저장됩니다.',
               isAdmin() ? (
                 <>
                   {btn('선박 등록', 'newShip', 'primary')}
@@ -576,6 +577,7 @@ export function createOperationsViews(model, views) {
               analysis,
               calculation,
             }[state.tab]()}
+        <PortReferencePanel />
         <SkillsPanel group="operations" />
       </>
     );

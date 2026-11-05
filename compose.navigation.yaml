@@ -1,0 +1,13 @@
+# Optional offline snapshot. Mount the directory so atomic catalog replacement is visible.
+# docker compose -f compose.yaml -f compose.navigation.yaml up --build -d
+services:
+  backend:
+    environment:
+      MARITIME_PORT_REFERENCES_PATH: /references/catalog.json
+    volumes:
+      - type: bind
+        source: ${MARITIME_PORT_REFERENCES_DIR:?Set MARITIME_PORT_REFERENCES_DIR to the installed snapshot directory}
+        target: /references
+        read_only: true
+        bind:
+          create_host_path: false

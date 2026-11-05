@@ -16,8 +16,12 @@ PostgreSQL 해사 데이터를 읽는 `backend/tools/`의 요청·응답·오류
 | `POST /api/maritime-data/calculate` | CO₂ 산술 및 입력 준비 상태 | 필요 |
 | `POST /api/maritime-data/reference-intensity` | MRV 보고 CO₂·DWT 후보·추정거리 기반 참고 지표 | 필요 |
 | `POST /api/maritime-data/ask` | 고정 scope의 규칙 기반 조회 도우미 | 필요 |
+| `GET /api/maritime-data/port-reference-catalog` | 별도 준비한 AIS·선석 참조 snapshot의 출처·제공 항구 | 필요 |
+| `POST /api/maritime-data/port-reference-screen` | 현재 DB의 실제 선박과 선석 게시 조건의 부분 비교 | 필요 |
 
 필드 계약과 오류는 아래에, 설치·실행은 운영 안내에 정의합니다.
+
+추가 선석 참조 경로는 서버의 `MARITIME_PORT_REFERENCES_PATH` 설정이 필요하며, 상세 입력·출력·노후화·제한은 [선석 참조 API](port-references.md)에 정의한다. 실제 입항 허가·안전 항해 판정이 아니다.
 
 ## 읽기 전용 조회
 

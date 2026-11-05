@@ -1,6 +1,17 @@
 # 아키텍처
 
 > 대상 버전: 1.4.0 · 최종 확인: 2026-11-04 (main 통합 코드 대조)
+
+## 외부 AIS·선석 참조 API (2026-11-04 로컬 시범)
+
+`scripts.prepare_navigation_references`의 명시적 오프라인 수집·준비 → 별도 JSON snapshot → 서버 전용 `MARITIME_PORT_REFERENCES_PATH` → `backend/tools/navigation_references.py` 순서다. 기존 해사 Bearer API와 일반 로그인 앱 어댑터가 같은 비교 함수를 사용한다. 요청 중 외부 네트워크를 조회하지 않으며 앱 원본 DB·MRV·DWT를 수정하지 않는다. 파일은 매 요청 크기·형식·식별자·시각을 재검사하며, Docker에서는 관리자가 읽기 전용 마운트를 설정한다. [계약과 실행법](specs/port-references.md).
+
+1.1 수집본은 항구별 출처·용도 범위를 갖는다. Gothenburg 제목 블록과 Helsinki 크루즈 선석 표를 각각 명시적 UN/LOCODE/WPI에 연결하며, 선택 항구의 수집 시각으로 노후화를 판정한다. `scripts.navigation_bundle`은 관리자 PC에서 묶음 생성·검사·설치와 이전 파일 보존을 담당하고 DB/인터넷에 접속하지 않는다. 선택적 `compose.navigation.yaml`은 설치 디렉터리를 읽기 전용 마운트해 원자 교체된 파일을 다음 요청에서 읽게 한다. 앱 JSON 백업과 별도이며, 배포한다고 source의 시각·법적 신뢰가 갱신되지 않는다.
+
+운항 화면의 `PortReferencePanel`은 기존 대상 선박을 사용해 `/api/operations/port-reference-screen`을 호출한다. 서버는 `api/maritime_context.py`의 공통 resolver로 앱 선박 ID→명시적 MRV 매핑→IMO를 확인한다. 이 resolver는 기존 MRV 계산 기능과 공유한다. 현재 계정·앱 선박 버전·연결은 결과 반환 전에 재확인하며 브라우저는 선택 변경 후 이전 응답을 버린다. 기존 공통 운항 조회 권한을 따르며, 선박별 ACL·LLM 라우팅은 추가하지 않는다. 날짜만 있는 앱 흘수 기록은 별도 참고로 표시하고 AIS나 현재 실측값으로 대체하지 않는다.
+
+기존 통합 질문의 `/api/ask`는 `api/navigation_query.py`에서 자동 유형의 제한된 항구 비교 질문을 처리한다. 질문의 명시 IMO/앱 선박명 또는 기존 선택 선박을 확인한 뒤, 항구가 생략된 목록 질문은 제공 항구 전체를 비교한다. `api/navigation_service.py`를 상세 API와 공유하고 `NavigationAnswer`가 기존 답변 영역에 항구별 건수·숫자·출처·부족 항목을 표시한다. 질문에서 확인한 선박은 대기 중 선택이 바뀌지 않았을 때만 기존 문맥에 반영한다. 명시 문서 전용·규정/정의 설명과 다른 유형은 기존 `db.answer` 경로를 유지한다. 일반 RAG store·모델 호출 함수는 수정하지 않으며, 이 분기는 규칙과 도구로 실행되는 한정 경로다. 범용 LLM 의도 분류·실제 입항 허가 판정은 구현하지 않는다. 답변은 기존 소유자별 질문 이력에 저장한다.
+
 > 이 문서는 **현재 구현**을 설명합니다. 앞으로 바꿀 계획은 [`plans/`](plans/), 바뀌지 않을 결정의 이유는 [`adr/`](adr/)에 있습니다.
 
 ## 현재 Python 문서 경로 (2026-10-13)
