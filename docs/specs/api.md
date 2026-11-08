@@ -1,7 +1,7 @@
 # HTTP API
 
 - 상태: 구현됨 (1.4.0)
-- 최종 확인: 2026-11-06 (운항 자료 등록 경로 추가·대조, 상세는 해당 명세)
+- 최종 확인: 2026-11-08 (운항 자료 등록·백업 복구의 BUSY 계약 대조)
 - 관련: [`../architecture.md`](../architecture.md), [`../data-model.md`](../data-model.md), [`integrated-answer.md`](integrated-answer.md), [ADR 0016](../adr/0016-crew-admin-authentication.md)
 
 ## 1. 목적
@@ -68,6 +68,8 @@
 앱 JSON 백업·복구의 대상은 기존 앱 16개 테이블입니다. 해사 스키마 전체는 포함하지 않습니다. 같은 DB의 `maritime_data.vessels.ship_id`가 있으면 복구 직전 현재 연결을 보관하고, 앱 선박 교체 후 동일한 정체성이 확인되는 연결만 복원합니다. 실제 선박은 원본 7자리 IMO와 복구한 비샘플 앱 선박의 IMO가 같아야 하고, IMO가 없는 합성 선박은 이전 명시 연결의 이름·선종·DWT·IMO·sample 구분이 유지되어야 합니다. ID만 같고 식별정보가 달라진 선박은 연결하지 않습니다.
 
 복구 응답은 `ok`, `safetyBackup`을 유지하며, 연결 컬럼이 있는 경우 `maritimeLinks={linkedBefore,restored,cleared,missingShips,identityMismatch}`를 추가합니다. 해제된 연결이 있으면 `warnings`도 반환하고 같은 건수를 감사 로그에 남깁니다. 이 응답은 현재 연결 보존 결과이며 과거 해사 데이터·연결을 복구하는 별도 백업을 대체하지 않습니다.
+
+복구는 다른 업무 요청·자동 백업과 동시에 실행하지 않습니다. 다른 요청이나 자동 백업이 보호 잠금을 잡고 있으면 **409 `BUSY`**를 반환할 수 있으며 이 거절은 복구 실행·세션 무효화의 성공 응답이 아닙니다. 작업이 끝난 뒤 같은 백업과 확인 문구로 명시적으로 다시 요청할 수 있습니다. 클라이언트가 복구 요청을 자동 재전송하지는 않습니다.
 
 ### 변경 `kind`
 
