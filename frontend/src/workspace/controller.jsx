@@ -1672,12 +1672,8 @@ export function createWorkspace() {
     if (t.dataset.report && canWrite() && state.draft.status === 'draft') {
       state.draft[t.dataset.report] = t.value;
       persistDraft();
-      if ($('#saveStatus'))
-        $('#saveStatus').textContent = state.localFailed
-          ? '브라우저 보관 실패 · 파일로 보관해 주세요'
-          : '브라우저 임시 보관 · 저장 전';
-      const b = $('[data-action=submitReport]');
-      if (b) b.disabled = true;
+      // events.onInput renders the state. Do not replace UiText's DOM children:
+      // doing so detaches the text node used by save and language updates.
     }
     if (t.dataset.calc) {
       state.calcInputs[t.dataset.calc] = t.value;
