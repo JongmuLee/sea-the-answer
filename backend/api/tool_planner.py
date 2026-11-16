@@ -11,7 +11,8 @@ import re
 
 import httpx
 
-from . import config, llm, tool_registry as registry
+from . import config, llm
+from tools import registry
 
 MAX_CALLS = 3
 RULES = (

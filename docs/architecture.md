@@ -2,7 +2,7 @@
 
 ## LLM 도구 선택 (2026-11-12 초안)
 
-`/api/ask`의 자동 질문은 `question_router.answer()`에서 문서 검색(`DocumentStore.search`)과 도구 선택 모델 호출(`tool_planner.plan`)을 병렬로 실행한다. 도구 정의·인자 스키마는 `tool_registry.py` 한곳에 있고, `tool_dispatch.py`가 모델이 낸 선박·문서·항구 표기와 기간 표현을 등록 목록·열람 권한·`question_intent.date_slots`로 바꾼 뒤 기존 실행기(`question_workflows.execute`, `navigation_query.try_answer(planned=…)`, `dataset_status.answer(scope_text=…)`, `ToolStore`)를 호출한다. 데이터 도구가 없으면 같은 검색 결과로 문서 답변을 만든다. 실행한 도구는 응답 `routing.toolCalls`에 남는다. 기존 규칙 우선 경로는 `legacy_answer()`로 남아 `HAEDAP_QUESTION_ROUTER=legacy`일 때만 쓴다. 계약은 [통합 답변 명세](specs/integrated-answer.md), 결정은 [ADR 0024](adr/0024-llm-tool-selection.md).
+`/api/ask`의 자동 질문은 `question_router.answer()`에서 문서 검색(`DocumentStore.search`)과 도구 선택 모델 호출(`tool_planner.plan`)을 병렬로 실행한다. 도구 정의·인자 스키마는 `tools/registry.py`와 `tools/schemas.py` 한곳에 있고, `tools/execution.py`가 모델이 낸 선박·문서·항구 표기와 기간 표현을 등록 목록·열람 권한·`question_intent.date_slots`로 바꾼 뒤 기존 실행기(`question_workflows.execute`, `navigation_query.try_answer(planned=…)`, `dataset_status.answer(scope_text=…)`, `ToolStore`)를 호출한다. 데이터 도구가 없으면 같은 검색 결과로 문서 답변을 만든다. 실행한 도구는 응답 `routing.toolCalls`에 남는다. 기존 규칙 우선 경로는 `legacy_answer()`로 남아 `HAEDAP_QUESTION_ROUTER=legacy`일 때만 쓴다. 계약은 [통합 답변 명세](specs/integrated-answer.md), 결정은 [ADR 0024](adr/0024-llm-tool-selection.md).
 
 ```mermaid
 flowchart LR
@@ -18,6 +18,21 @@ flowchart LR
   R --> A
 ```
 
+### Tool 위치와 공통 정의 (2026-11-16)
+
+| 위치 | 책임 |
+|---|---|
+| `tools/schemas.py` | 모델 도구와 고정 업무 스킬의 입력 모델. API·DB import 없음 |
+| `tools/registry.py` | 모델 13개 항목·HTTP 계산기 2개·업무 스킬 6개의 목록, 모델 JSON/카탈로그 생성, action·HTTP 인자 별칭 |
+| `tools/execution.py` | 검증된 모델 호출을 기존 사용자 권한·선박·기간·문서 범위 실행기로 연결 |
+| `tools/workflows.py` | 고정 업무 스킬 실행·운항 합계·근거/소유자 재검사·기존 이력 저장 |
+| `tools/basic.py` | 기존 배출량·항해시간 입력 검증과 계산. DB 저장 없음 |
+| `tools/query.py`, `reference_intensity.py`, `navigation_*.py` 등 | 기존 해사 DB·참조 자료 조회와 계산 |
+| `api/store/tools.py`, `api/routes/` | 계산 실행 기록, HTTP 인증·권한·감사 경계와 기존 응답 |
+| `api/tool_planner.py`, `api/llm.py`, `api/question_router.py` | 모델 호출·출력 검증·질문 오케스트레이션 |
+
+기존 API/화면의 서로 다른 응답을 강제로 하나로 바꾸지 않는다. 내부 입력·목록·변환 정의만 통합하고 공개 HTTP 계약은 보존한다. `tools/execution.py`와 `tools/workflows.py`는 앱 실행 어댑터라 `api`의 검증·조회 인터페이스를 이용하지만 FastAPI 앱을 import하지 않는다. `tools/registry.py`와 `schemas.py`는 이 어댑터나 API를 import하지 않아 모델 정의 조회가 DB·앱 초기화를 유발하지 않는다. 신규 Tool의 모델 노출 여부와 서버 전용 Bearer 경계는 별도로 유지한다.
+
 ## 관리자 운항 자료 가져오기 (2026-11-06)
 
 기존 CSV 버튼의 `OperationImport`가 관리자 세션/CSRF로 파일을 나눠 전송한다. `api/operation_uploads.py`는 소유자·크기·TTL·순서·미리보기 해시를 관리한다. `tools/operation_import.py`는 알려진 CSV/준비 ZIP·JSON을 판별하고 기존 테이블의 고정 열·FK·출처·실제/가상 경계를 검증한다. 미리보기는 savepoint에서 실제 제약을 검사한 뒤 롤백하며 등록은 단일 DB 트랜잭션이다. 같은 키의 다른 행은 거절하고 같은 행은 보존한다. 임의 경로·DDL·실행 파일·SQL·LLM 도구는 공개하지 않는다.
@@ -28,7 +43,7 @@ flowchart LR
 
 `routes/documents.ask`는 `question_router`를 통해 자료 현황 → 기존 항구/업무·대화 경로 → 명시 문서 설명 → 선택적 의미 분류 순으로 기존 기능에 연결한다. `dataset_intent`는 자료 이름·유무/출처 요청을 정의·계산·변경 요청과 구분하며, `dataset_status`는 실제 DB·참조 파일·현재 계정 문서에서 등록 현황을 읽는다. 규칙 경로가 놓친 AI 모드 질문에는 설정된 모델이 폐쇄형 action 하나만 제안한다(12초·32토큰 제한). 서버가 내부 route/dataset으로 변환한다. 실패·모호함·지원 밖 의도는 조건 확인으로 안내한다. 기존 원문 발췌의 일반 문서 질문은 유지한다.
 
-`question_intent`는 날짜·작업 규칙을, `question_workflows`는 기존 `workflow_skills.operation_result`, `reference_intensity.calculate_reference`, 선택 문서 실행을 담당한다. 의미 분류 결과도 기존 실행기의 선박·날짜·매핑·권한 검증을 통과해야 하며 두 번의 모델 계획을 연달아 호출하지 않는다. 모델에 SQL·선박 ID·날짜·숫자 결과를 맡기는 범용 실행 경로는 없다.
+`question_intent`는 날짜·작업 규칙을, `question_workflows`는 기존 `tools.workflows.operation_result`, `reference_intensity.calculate_reference`, 선택 문서 실행을 담당한다. 의미 분류 결과도 기존 실행기의 선박·날짜·매핑·권한 검증을 통과해야 하며 두 번의 모델 계획을 연달아 호출하지 않는다. 모델에 SQL·선박 ID·날짜·숫자 결과를 맡기는 범용 실행 경로는 없다.
 
 현재 소유자의 지정 부모 응답만 후속 범위로 검증하고, 결과는 기존 queries/query_owner와 감사 기록에 저장한다. 매 요청 현재 도구를 다시 실행하며 반환 전 인증·선박 버전·매핑·문서 권한을 재확인한다. 브라우저의 기존 질문 화면은 `QuestionWorkflow`로 해석 범위·현재 필요한 후보·여러 도구 결과·산술 비교를 표시하고 새 질문 뒤 늦은 응답을 버린다. 운항 표·차트는 질문으로 확인한 한 선박·한 기간의 동일 DB 조회 결과를 집계와 표시 투영에 함께 사용한다. [입출력·제한](specs/integrated-answer.md#자연어-업무-실행-확장-2026-11-06-구현됨).
 
@@ -78,7 +93,7 @@ flowchart LR
 
 ### 업무 스킬 실행
 
-기존 질문·문서·운항·보고서 화면의 재사용 SkillsPanel → 일반 앱 API `/api/skills/run` → `api/workflow_skills.py`의 고정 handler로 실행한다. 지침은 Docker에 이미 복사되는 `knowledge/skills/<id>/SKILL.md`에 있다. 모델은 지침·원문에 기반한 설명에만 선택적으로 쓰며, 식별자·기간·SQL·권한·수치를 생성하지 않는다. 여섯 기능의 기본 실행에는 LLM이 필요 없다. 독립 업무 스킬 메뉴는 없으며 이전 /skills는 /chat으로 이동한다. 문서 상세는 현재 활성 문서, 운항·보고서는 공통 선박·기간, 응답 평가는 현재 답변 ID로 초기화한다. 패널을 펼칠 때만 카탈로그를 요청한다. [계약](specs/workflow-skills.md), [ADR 0015](adr/0015-optional-model-workflow-skills.md).
+기존 질문·문서·운항·보고서 화면의 재사용 SkillsPanel → 일반 앱 API `/api/skills/run` → `tools/workflows.py`의 고정 handler로 실행한다. 지침은 Docker에 이미 복사되는 `knowledge/skills/<id>/SKILL.md`에 있다. 모델은 지침·원문에 기반한 설명에만 선택적으로 쓰며, 식별자·기간·SQL·권한·수치를 생성하지 않는다. 여섯 기능의 기본 실행에는 LLM이 필요 없다. 독립 업무 스킬 메뉴는 없으며 이전 /skills는 /chat으로 이동한다. 문서 상세는 현재 활성 문서, 운항·보고서는 공통 선박·기간, 응답 평가는 현재 답변 ID로 초기화한다. 패널을 펼칠 때만 카탈로그를 요청한다. [계약](specs/workflow-skills.md), [ADR 0015](adr/0015-optional-model-workflow-skills.md).
 
 선택 문서 ID는 권한·활성 개정본을 먼저 확인하고 SQL 조회 조건으로 제한한다. MRV 실행은 앱 선박의 명시 매핑·IMO 정체성을 검증한 뒤 기존 Python Tool을 호출한다. 일반 앱 경계를 통해 호출하므로 서버 Bearer를 브라우저에 전달하지 않는다. 보고서 초안 생성은 payload만 반환하며 별도 버튼으로 저장한다. 실행 기록은 기존 queries/query_owner/audit에 보관하고 새 스키마는 만들지 않는다.
 
@@ -206,7 +221,7 @@ sequenceDiagram
 | `api/rag_jobs.py`, `api/rag_worker.py` | 문서 저장 트랜잭션의 자동 색인 작업 기록과 별도 worker의 획득·임베딩·세대 확인·완료 처리 |
 | `api/errors.py`, `api/validation.py` | `ApiError`·`require`, 입력 검증·형식 도우미 |
 | `knowledge/seed.json`, `knowledge/documents/`, `knowledge/sample-data.json` | 기본 문서와 그 원본 PDF(`file` 필드로 연결), "예시 데이터 넣기"용 가상 운항 기록 |
-| `tools/` | 서비스 실행 중 사용하는 읽기 전용 해사 데이터 조회·계산·규칙 기반 조회 도우미(8절) |
+| `tools/` | 공통 등록부·입력 모델·실행기·업무 스킬, 해사 자료 조회·계산·참조 도우미 |
 | `tests/` | 앱과 해사 Tool pytest (`backend/`에서 `uv run pytest`) |
 
 최상위 `scripts/`는 원본·공개 참조 자료 정규화, 전처리·품질 판정, 필드 사전 생성, CSV 적재 및 명시적 선박 연결을 담당합니다. backend uv 환경의 `data` 의존성 그룹을 사용하며 운영 이미지에는 포함하지 않습니다([ADR 0011 제안](adr/0011-tools-runtime-and-data-preparation.md)). 자료 준비는 서비스 시작이나 Tool 호출 때 자동 실행하지 않습니다.
@@ -243,7 +258,7 @@ DB 스키마는 backend가 아니라 최상위 `migrations/`(dbmate)가 소유�
 | 답변 생성(LLM 공급자) | `api/llm.py`, `api/config.py`, `api/store/answers.py`의 `mode=llm` 분기 | [공급자 계약](specs/llm-provider.md), 문장·표의 `chunkId`·`quote` 인용 검증, 입력 바이트·시간 예산 |
 | 표·차트 표현 | `api/answer_presentation.py`, `frontend/src/components/answer-presentation.jsx` | [표현 계약](specs/answer-presentation.md), 원문 인용·실제 조회 수치·전체/표시 개수 구분 |
 | 의도 분류·Agent | `api/store/answers.py`의 `answer` | [`specs/integrated-answer.md`](specs/integrated-answer.md) 출력 형식 |
-| 계산 Tool 추가 | `api/store/tools.py`(`TOOL_DEFINITIONS`, 계산 메서드), `api/routes/system.py`(경로) | 입력 검증, `version`·`assumptions` 반환, `tool_runs` 기록 |
+| 계산 Tool 추가 | `tools/registry.py`·`tools/schemas.py`(정의), `tools/basic.py`(계산), `api/store/tools.py`(기록) | 입력 검증, `version`·`assumptions` 반환, `tool_runs` 기록 |
 | 보고서 서식 | `api/store/reports.py`의 `generate_report` | 없는 값은 `[미입력 · 확인 필요]` |
 | 새 서비스(로컬 LLM, 벡터 DB 등) | `compose.yaml`에 서비스 추가, backend 환경변수로 주소 전달 | 공개 포트는 frontend 하나 유지 |
 

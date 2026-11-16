@@ -19,7 +19,9 @@
 5. 모델은 항상 도구를 하나 호출하며, 문서만으로 답할 질문은 `answer_from_documents`를 고른다. 데이터 도구 호출이 0개이면 검색 근거로 문서 답변을 생성한다(기존 인용 검증). 1개이면 서버가 인자를 검증해 해당 실행기를 호출하고, 검색 근거를 `relatedEvidence`로 함께 반환한다. 2개 이상이면 되묻기로 처리한다(이번 범위는 질문당 데이터 도구 1개, 운항+MRV는 결합 도구 1개로 처리).
 6. 모델 호출 실패·시간 초과·등록되지 않은 도구·인자 검증 실패는 `needs_input` 되묻기(`warnings: ["MODEL_ROUTING_UNAVAILABLE"]`)로 응답한다. 규칙 경로로 자동 대체하지 않는다.
 
-**도구.** 정의는 `backend/api/tool_registry.py` 한곳에서 만들며 `GET /api/tools`의 `assistantTools`로도 제공한다. 모든 인자 객체는 추가 필드를 거절한다.
+**도구.** 정의는 `backend/tools/registry.py` 한곳에서 만들며 입력 모델은 `backend/tools/schemas.py`에 둔다. 모델용 JSON과 `GET /api/tools`의 `assistantTools`는 같은 정의에서 생성한다. 기존 HTTP 계산기 목록 `tools`도 같은 등록부의 명시적 HTTP 메타데이터로 생성하며 기존 필드 이름·설명을 유지한다. 모든 모델 인자 객체는 추가 필드를 거절한다.
+
+**실행 경계(2026-11-16).** `tools/execution.py`는 기존 대상·기간·동의 검사를 거쳐 기존 앱 실행기로 연결한다. 워크플로의 action과 계산기 인자 별칭은 등록부가 소유하며, HTTP 계산기의 `fuel`/`distance`와 모델의 `fuel_t`/`distance_nm` 차이를 명시적으로 변환한다. `tools/basic.py`는 계산 결과만 반환하고 `api/store/tools.py`는 기존 `tool_runs` 저장을 담당한다. 업무 스킬 6종은 `tools/workflows.py`에서 실행하되 모델 allowlist에 새로 노출하지 않는다. API URL·요청·응답·오류·권한·이력 계약은 유지한다.
 
 | 도구 | 인자 | 서버 검증·변환 | 실행기 |
 |---|---|---|---|

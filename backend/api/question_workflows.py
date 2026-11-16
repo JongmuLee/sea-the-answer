@@ -11,7 +11,8 @@ from psycopg.types.json import Jsonb
 from pydantic import Field, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import question_intent as intent, workflow_skills as skills, config
+from . import question_intent as intent, config
+from tools import workflows as skills
 from .errors import ApiError, require
 from .maritime_context import resolve_real_ship
 from .validation import utc_now

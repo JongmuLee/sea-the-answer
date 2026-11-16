@@ -34,7 +34,7 @@ test('six UI requirements: language, transcript, source, history and deletion', 
   await page.locator('#question').fill('입력 중 질문');
   await page.locator('.language-button').click();await page.getByRole('button',{name:'English',exact:true}).click();
   await expect(page.locator('[data-nav="docs"]')).toHaveText('Documents');
-  await expect(page.getByLabel('Answer mode',{exact:true})).toHaveValue('llm');
+  await expect(page.getByLabel('Answer mode',{exact:true})).toHaveCount(0);
   await expect(page.locator('#question')).toHaveValue('입력 중 질문');
   await expect(page.locator('.brand-title-en')).toHaveText('SEATHE ANSWER');
   await expect(page.locator('.brand-title-en br')).toHaveCount(1);
@@ -53,9 +53,10 @@ test('six UI requirements: language, transcript, source, history and deletion', 
   await expect(page.locator('.chat-turn')).toHaveCount(2);
   await expect.poll(()=>page.evaluate(()=>Math.abs(document.documentElement.scrollHeight-innerHeight-scrollY))).toBeLessThan(3);
   if (process.env.CAPSTONE_UI_SCREENSHOTS) await page.screenshot({path:process.env.CAPSTONE_UI_SCREENSHOTS+'/desktop.png',fullPage:true});
-  expect(requests.map(r=>[r.question,r.language,r.mode,r.task])).toEqual([['첫 질문','auto','llm','auto'],['둘째 질문','auto','llm','auto']]);
+  expect(requests.map(r=>[r.question,r.language,r.mode,r.task])).toEqual([['첫 질문','auto',undefined,'auto'],['둘째 질문','auto',undefined,'auto']]);
   expect(requests[1].conversationId).toBe('q1');
-  await expect(page.locator('.chat-turn').first().locator('.answer > p').nth(1)).toContainText('문서');
+  // The answer statement comes first; the generic notice is inside the details toggle.
+  await expect(page.locator('.chat-turn').first().locator('.answer > p').first()).toContainText('문서');
   const gap=await page.locator('.chat-turn').first().evaluate(e=>e.querySelector('.answer').getBoundingClientRect().top-e.querySelector('.question-bubble').getBoundingClientRect().bottom);
   expect(gap).toBe(20);
   const between=await page.locator(".chat-content").evaluate(e=>{const t=e.querySelectorAll(".chat-turn");return t[1].querySelector(".question-bubble").getBoundingClientRect().top-t[0].querySelector(".answer").getBoundingClientRect().bottom;});

@@ -6,6 +6,8 @@
 
 ## API
 
+2026-11-16 코드 정리: 입력 모델은 `backend/tools/schemas.py`, 카탈로그는 `backend/tools/registry.py`, 실행기는 `backend/tools/workflows.py`가 소유한다. `api/routes/skills.py`의 기존 로그인·CSRF·요청 트랜잭션 경계와 아래 공개 계약은 유지한다. 스킬 ID를 모델 도구 allowlist에 자동으로 추가하지 않는다.
+
 일반 앱의 개인 계정 로그인·비밀번호 변경 확인·쿠키·Host/Origin·POST CSRF·사용자 식별·요청 트랜잭션을 그대로 사용한다. 두 경로 모두 익명 접근은 401로 차단한다.
 
 - GET `/api/skills`: 여섯 스킬의 ID·이름·설명·버전·선택 LLM 지원 여부.

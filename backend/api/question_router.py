@@ -11,7 +11,8 @@ import httpx
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from . import config, dataset_status, llm, navigation_query, question_intent, question_workflows, tool_dispatch, tool_planner
+from . import config, dataset_status, llm, navigation_query, question_intent, question_workflows, tool_planner
+from tools import execution as tool_dispatch
 from .dataset_intent import DATASETS, inventory_request, sources
 from .errors import ApiError, require
 from .question_intent import explanation_request

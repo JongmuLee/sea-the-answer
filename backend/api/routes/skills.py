@@ -1,6 +1,6 @@
 """Skill workflows stay behind the ordinary app security and transaction boundary."""
 
-from .. import workflow_skills
+from tools import workflows as workflow_skills
 from ..errors import require
 from ..web import security
 

@@ -10,7 +10,8 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from api import config, question_router as router, tool_planner as planner, tool_registry as registry
+from api import config, question_router as router, tool_planner as planner
+from tools import registry
 from api.errors import ApiError
 from test_question_workflows import DB
 
@@ -467,7 +468,7 @@ def test_operations_inventory_with_real_date_columns_is_json_serializable(monkey
 
 
 def test_shortened_ship_name_is_completed_only_from_the_question():
-    from api import tool_dispatch
+    from tools import execution as tool_dispatch
     ships = [{'id': 'x', 'name': '가상 선박 해답 2호 · 왕복 시나리오'}, {'id': 'y', 'name': '가상 선박 해답호'}]
     q = '가상 선박 해답 2호 · 왕복 시나리오의 2026년 10월 연료 사용량 합계 알려줘'
     assert tool_dispatch.resolve_ship('가상 선박 해답 2호', q, ships) == '가상 선박 해답 2호 · 왕복 시나리오'
@@ -544,7 +545,7 @@ def test_position_asks_for_a_ship_and_reports_missing_records(monkeypatch):
 
 
 def test_operations_summary_counts_projected_days():
-    from api import workflow_skills as skills
+    from tools import workflows as skills
     rows = [{**sim_record(d, 'x', projected=p), 'fuel': 1, 'factor': 3.114, 'distance': 10, 'speed': 1}
             for d, p in (('2026-11-09', False), ('2026-11-10', True))]
     body = skills.SkillRequest(skill='operation-summary', question='q',

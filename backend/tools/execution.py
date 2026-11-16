@@ -11,12 +11,11 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 from pydantic import ValidationError
 
-from . import dataset_status, navigation_query, question_intent as intent, question_workflows as flow
-from .validation import utc_now
-from .workflow_skills import projected_record as projected
+from api import dataset_status, navigation_query, question_intent as intent, question_workflows as flow
+from api.validation import utc_now
+from .workflows import projected_record as projected
+from .registry import http_payload
 
-ACTIONS = {'summarize_operations': 'operations_summary', 'calculate_mrv_reference': 'mrv_reference',
-           'calculate_operations_and_mrv': 'combined', 'ask_selected_documents': 'selected_document'}
 CLARIFY = {'task': '확인할 작업', 'ships': '선박', 'periods': '기간', 'years': '보고 연도', 'documents': '문서', 'ports': '항구'}
 DECLINE = {
     'realtime_position': '실시간 연속 추적은 지원하지 않습니다. 운항기록에 저장된 마지막 위치는 선박 이름과 함께 물어 확인할 수 있습니다.',
@@ -212,8 +211,8 @@ def port_comparison(ctx, args):
 
 def run(ctx, call, period=None):
     name, args = call.tool.name, call.args
-    if name in ACTIONS:
-        return workflow(ctx, ACTIONS[name], args, period)
+    if call.tool.action:
+        return workflow(ctx, call.tool.action, args, period)
     if name == 'get_dataset_status':
         names = [resolve_ship(m, ctx.body['question'], ctx.db.ships()) for m in args.ship_mentions]
         scope_text = ' '.join([args.period_text if period is None else period, *names]).strip()
@@ -227,12 +226,10 @@ def run(ctx, call, period=None):
     if name == 'compare_port_conditions':
         return port_comparison(ctx, args)
     if name == 'calculate_emissions':
-        result = ctx.db.calculate_emissions({'fuel': args.fuel_t, 'factor': args.factor, 'dwt': args.dwt,
-                                             'distance': args.distance_nm})
+        result = ctx.db.calculate_emissions(http_payload(call))
         return save(ctx, {'toolRuns': [result], 'notice': '질문에 주어진 값으로 계산했습니다. 공식 CII 등급이 아닙니다.'})
     if name == 'voyage_time':
-        result = ctx.db.voyage_time({'start': args.start, 'end': args.end, 'before': args.start_offset_min,
-                                     'after': args.end_offset_min})
+        result = ctx.db.voyage_time(http_payload(call))
         return save(ctx, {'toolRuns': [result], 'notice': '질문에 주어진 UTC 시각과 시차로 계산했습니다.'})
     if name == 'request_clarification':
         labels = '·'.join(CLARIFY[m] for m in args.missing)

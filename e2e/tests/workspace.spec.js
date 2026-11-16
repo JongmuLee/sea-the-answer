@@ -631,8 +631,11 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     await go('chat');
     await action('history').click();
     await page.locator(`[data-action=historyAnswer][data-id="${value.id}"]`).click();
-    const evaluation = page.locator('[data-workflow=evaluation]');
-    await evaluation.locator('summary').first().click();
+    const restoredAnswer = page.locator(`[data-answer-id="${value.id}"]`);
+    // Evaluation now lives inside the answer's collapsed evidence/details section.
+    await restoredAnswer.getByTestId('answer-details').locator(':scope > summary').click();
+    const evaluation = restoredAnswer.locator('[data-workflow=evaluation]');
+    await evaluation.locator(':scope > summary').click();
     await evaluation.getByRole('button', { name: '응답 점검 실행', exact: true }).click();
     await expect(page.locator('.skill-result table')).toContainText('사람 검토 필요');
   });

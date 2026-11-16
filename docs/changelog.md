@@ -1,5 +1,13 @@
 # 변경 이력과 검증 기록
 
+## 2026-11-16 - Tool 패키지 통합
+
+- 모델 입력을 `tools/schemas.py`, 도구 정의와 카탈로그를 `tools/registry.py`, 기존 호출 실행을 `tools/execution.py`, 업무 스킬을 `tools/workflows.py`로 모았다. LLM 공급자 호출·질문 오케스트레이션과 HTTP 인증·권한은 기존 API 경계에 남긴다.
+- 기존 HTTP 계산 목록을 등록부에서 생성하고, 모델/HTTP 인자 별칭과 워크플로 action을 같은 도구 정의에서 관리한다. 산술은 `tools/basic.py`, `tool_runs` 저장은 `api/store/tools.py`로 분리했다. 기존 카탈로그·요청·응답·수치·오류 계약과 모델 allowlist를 보존했다. 기존 import와 현재 구조 문서를 갱신했다.
+- Docker의 Python 3.13·`uv sync --locked` 검증: backend 전체 **1,146 passed / 205 skipped**. 일회용 PostgreSQL 기존 경로 **130 passed / 4 skipped**(legacy 명시), 모의 플래너 + 실제 HTTP/PG의 새 모델 경로에서 소유권·실행 중 계정 해제 검사 **2 passed**. 범위가 겹치므로 합산하지 않는다. 기본 검사에서 건너뛴 모든 범위를 검증했다는 뜻은 아니다.
+- 화면 검사의 기존 답변 방식 선택 기대·본문 위치·중첩 상세 보기 선택자를 현행 UI 계약에 맞췄다. 임시 DB·OpenSearch/Nori를 재생성한 Docker 화면 검사 **39 passed / 4.0분**. E2E의 모델 미설정 `legacy` 경로와 실제 Qwen 호출은 구분한다.
+- 통합 코드·호환성 검사·구조 문서를 독립된 Draft PR 범위로 분리했다. 상세 범위와 검증 결과는 [완료 기록](plans/2026-11-16-tool-consolidation.md)에 남겼다.
+
 ## 2026-11-12 — LLM 도구 선택 전환 (초안, `feature/llm-tool-selection`)
 
 - 자동 질문은 문서 검색을 항상 실행하고, 모델이 OpenAI 호환 tool calling으로 데이터 도구 0~1개와 인자를 고른다. 서버는 `tool_registry.py`의 allowlist·Pydantic 스키마로 검증하고, 모델이 낸 선박·문서·항구 표기와 기간 표현을 등록 목록·열람 권한·기존 날짜 해석기로 바꾼 뒤 기존 실행기를 호출한다([ADR 0024 제안](adr/0024-llm-tool-selection.md), [계획](plans/2026-11-12-llm-tool-selection.md)).
