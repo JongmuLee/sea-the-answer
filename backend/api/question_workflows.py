@@ -62,10 +62,10 @@ def snapshot(ship):return Ship(id=ship['id'],name=ship['name'],version=ship['ver
 
 
 def explicit_ships(question,ships,mentions=()):
+    from api.ship_identity import named_ships, name_aliases
     imos=re.findall(r'\bIMO\s*[:#]?\s*(\d{7})(?=$|[^A-Za-z0-9_])',question,re.I)
     if any(not valid_imo(i) for i in imos):raise ValueError('IMO 번호의 자리수·검증 숫자를 확인해 주세요.')
-    names=[s for s in ships if len(norm(s['name']))>=2 and re.search(
-        r'(?<![가-힣a-z0-9_-])'+re.escape(norm(s['name']))+r'(?=$|[\s,/.·?!]|(?:으로|의|와|과|를|을|는|은|도|에|로|이|가)(?:\s|[?.!]|$))',norm(question))]
+    names=named_ships(question,ships,allow_ambiguous=bool(imos))
     if len({norm(s['name']) for s in names})<len(names) and not imos:
         raise ValueError('같은 이름의 선박이 여러 척입니다. IMO 번호 또는 선박 선택으로 구분해 주세요.')
     if imos:
@@ -75,7 +75,11 @@ def explicit_ships(question,ships,mentions=()):
     for mention in mentions:
         if re.sub(r'\s+','',norm(mention)) in ('우리배','우리선박','이배','해당선박','ourship','ourvessel','thisship'):
             continue
-        rows=[s for s in ships if norm(s['name'])==norm(mention) or norm(s.get('imo'))==norm(mention).removeprefix('imo ').strip()]
+        alias=re.sub(r'\s+','',norm(mention))
+        rows=[s for s in ships if alias in name_aliases(s['name']) or norm(s.get('imo'))==norm(mention).removeprefix('imo ').strip()]
+        if imos and len(rows)>1:
+            rows=[s for s in rows if re.sub(r'^IMO\s*','',str(s.get('imo','')),flags=re.I) in imos]
+        if len(rows)>1:raise ValueError('같은 이름의 선박이 여러 척입니다. IMO 번호 또는 선박 선택으로 구분해 주세요.')
         if not rows:raise ValueError('질문에 있는 선박을 등록 선박 목록에서 확인할 수 없습니다.')
         matched.update((s['id'],s) for s in rows)
     if imos and any(not any(i==re.sub(r'^IMO\s*','',str(s.get('imo','')),flags=re.I) for s in matched.values()) for i in imos):
@@ -87,6 +91,8 @@ def explicit_ships(question,ships,mentions=()):
 
 
 def previous(ctx,ships):
+    from api.ship_context import starts_new_scope
+    if starts_new_scope(ctx.body.get('question')):return None
     value=(ctx.body.get('context') or {}).get('previousQueryId')
     if not isinstance(value,str):return None
     try:

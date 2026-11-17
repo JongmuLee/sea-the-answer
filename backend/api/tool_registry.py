@@ -147,8 +147,9 @@ TOOLS = {tool.name: tool for tool in (
          DatasetStatusArgs, 'data'),
     Tool('get_ais_catalog_status', '연결된 AIS 수집본의 관측 수와 특정 선박의 관측 여부를 확인한다.', AisStatusArgs, 'data'),
     Tool('summarize_operations', '등록 선박의 기간별 일별 운항기록(연료·CO2·거리)을 합계·비교한다.', OperationsArgs, 'data'),
-    Tool('get_last_recorded_position', '등록 선박의 일별 운항기록에 저장된 가장 최근 위치(기록 일자 기준)를 알려준다. '
-         '"지금/현재 어디야", "마지막 위치"처럼 선박 위치를 물을 때 쓴다. 실시간 추적이 아니다.', PositionArgs, 'data'),
+    Tool('get_last_recorded_position', '등록 선박의 기록 위치·기록 시각·실제/가상 자료 구분을 알려준다. '
+         '질문에 날짜가 있으면 서버가 그 날짜의 위치만 조회하고, 날짜가 없으면 마지막 완료 기록을 조회한다. '
+         '현재 위치 추정·실시간 추적은 아니다.', PositionArgs, 'data'),
     Tool('calculate_mrv_reference', 'MRV 보고 자료로 연도별 참고 탄소집약도를 계산한다(여러 연도 비교 포함). '
          '탄소집약도·MRV 참고값만 물을 때 쓴다. 공식 CII 등급이 아니다.', MrvArgs, 'data'),
     Tool('calculate_operations_and_mrv', '일별 운항 실적(연료·CO2·거리 합계)과 MRV 참고 탄소집약도를 함께 계산한다. '

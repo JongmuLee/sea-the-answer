@@ -121,7 +121,7 @@ def local_today():
     return datetime.now(timezone(timedelta(hours=9))).date()
 
 
-def date_slots(q,today=None,default_year=None):
+def date_slots(q,today=None,default_year=None,default_month=None):
     today=today or local_today()
     q=re.sub(r'지난\s+달','지난달',q)
     if re.search(r'다음\s*(?:달|주)|내년|모레|내일',q):
@@ -150,7 +150,7 @@ def date_slots(q,today=None,default_year=None):
             # 최근 N일 denotes a duration, not a day of month.
             if re.search(r'(?:최근|지난)\s*$',q[:match.start()]):continue
             year=int(match[1]) if match[1] else years[0] if len(years)==1 else default_year
-            month=int(match[2]) if match[2] else days[-1].month if days else None
+            month=int(match[2]) if match[2] else days[-1].month if days else default_month
             if year is None or month is None:raise ValueError('날짜와 함께 연도·월을 알려 주세요.')
             days.append(date(year,month,int(match[3])))
         if days:

@@ -471,8 +471,8 @@ def test_shortened_ship_name_is_completed_only_from_the_question():
     ships = [{'id': 'x', 'name': '가상 선박 해답 2호 · 왕복 시나리오'}, {'id': 'y', 'name': '가상 선박 해답호'}]
     q = '가상 선박 해답 2호 · 왕복 시나리오의 2026년 10월 연료 사용량 합계 알려줘'
     assert tool_dispatch.resolve_ship('가상 선박 해답 2호', q, ships) == '가상 선박 해답 2호 · 왕복 시나리오'
-    # The full name must be in the question: a fragment alone is never expanded.
-    assert tool_dispatch.resolve_ship('가상 선박 해답 2호', '가상 선박 해답 2호 연료', ships) == '가상 선박 해답 2호'
+    # Only explicitly defined, unique display-name aliases may now be expanded.
+    assert tool_dispatch.resolve_ship('가상 선박 해답 2호', '가상 선박 해답 2호 연료', ships) == '가상 선박 해답 2호 · 왕복 시나리오'
     # Ambiguous fragments stay as they are and lead to a clarification.
     both = q + ' 그리고 가상 선박 해답호'
     assert tool_dispatch.resolve_ship('가상 선박', both, ships) == '가상 선박'
