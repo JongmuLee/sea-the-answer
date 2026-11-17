@@ -40,6 +40,7 @@ EXAMPLES = [
 
 # One owned answer and its original clarification request, never a transcript or result rows.
 CONTEXT_MISSING = {'task', 'ships', 'periods', 'years', 'documents', 'document_ids', 'ports', 'reference_ack'}
+CONTEXT_DATASETS = {'ais', 'mrv', 'dwt', 'noon', 'operations', 'documents', 'ports', 'all'}
 
 
 def _context_text(value, limit):
@@ -92,7 +93,7 @@ def previous_context(prior):
     if isinstance(status, dict):
         summary['datasets'] = [item['dataset'] for item in _context_list(status.get('datasets'), 7)
                                if isinstance(item, dict) and isinstance(item.get('dataset'), str)
-                               and item['dataset'] in (*registry.DATASETS, 'all')]
+                               and item['dataset'] in CONTEXT_DATASETS]
     routing = prior.get('routing')
     tools = _context_list(routing.get('toolCalls'), MAX_CALLS + 1) if isinstance(routing, dict) else []
     summary['tools'] = [item['name'] for item in tools if isinstance(item, dict)

@@ -200,7 +200,7 @@ def workflow(ctx, action, args, period=None):
             scope.reference_ack = bool(args.accept_reference and prompted) or bool(earlier and earlier.reference_ack)
         result = flow.execute(ctx, scope, routing, parent)
         if result.get('status') == 'needs_input':
-            result['continuation'] = continuation_request(ctx, next((k for k,v in ACTIONS.items() if v==action), ''),
+            result['continuation'] = continuation_request(ctx, '',
                                                         result.get('workflow', {}).get('missing', []))
         return result
     except (ValueError, ValidationError) as exc:
