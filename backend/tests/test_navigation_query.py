@@ -201,7 +201,8 @@ def test_normal_ask_endpoint_uses_session_csrf_and_never_calls_generic_rag_for_p
     security.sessions.clear()
 
 
-def test_navigation_history_is_owned_in_actual_postgres(database,setup):
+def test_navigation_history_is_owned_in_actual_postgres(database,setup,monkeypatch):
+    monkeypatch.setenv('HAEDAP_QUESTION_ROUTER','legacy')
     ctx,loader,calculator=setup
     actor=database.one("SELECT * FROM users WHERE username='admin'")
     database.change(actor,'ship.save',{'id':'ship-1','name':'검증 선박','imo':IMO,'dwt':1000,'type':'Bulk carrier','version':0})
@@ -215,7 +216,8 @@ def test_navigation_history_is_owned_in_actual_postgres(database,setup):
     assert all(r['id']!=answer_id for r in other.get('/api/history').json()['history'])
 
 
-def test_mid_request_account_revocation_rolls_back_navigation_history(database,setup):
+def test_mid_request_account_revocation_rolls_back_navigation_history(database,setup,monkeypatch):
+    monkeypatch.setenv('HAEDAP_QUESTION_ROUTER','legacy')
     ctx,loader,calculator=setup
     actor=database.one("SELECT * FROM users WHERE username='admin'")
     database.change(actor,'ship.save',{'id':'ship-1','name':'검증 선박','imo':IMO,'dwt':1000,'type':'Bulk carrier','version':0})

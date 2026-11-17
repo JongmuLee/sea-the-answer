@@ -69,9 +69,10 @@ def period_source(call, question, summary=None):
     (e.g. "지난달" -> "마지막 달") falls back to parsing the original question.
     """
     text = (getattr(call.args, 'period_text', '') or '').strip()
+    # A new explicit date always overrides dates remembered by the model.
+    if re.search(r'\d{4}-\d{2}-\d{2}|\d+\s*[년월일]|오늘|어제|그제|지난|이번|올해|작년|전날',question):
+        return question, 'question'
     if not text:
-        if re.search(r'\d{4}-\d{2}-\d{2}|\d+\s*[년월일]|오늘|어제|그제|지난|이번|올해|작년|전날',question):
-            return question, 'question'
         return '', 'none'
     if compact(text) in source_text(question, summary):
         return text, 'model'
@@ -180,7 +181,9 @@ def workflow(ctx, action, args, period=None):
         if not text and earlier:
             scope.years, scope.periods = earlier.years, earlier.periods
         names = [resolve_ship(m, q, current) for m in args.ship_mentions]
-        ships = flow.explicit_ships(' '.join(names), current, names) if names else []
+        ships = flow.explicit_ships(q, current)
+        if not ships and names:
+            ships = flow.explicit_ships(' '.join(names), current, names)
         if ships:
             scope.ships = [flow.snapshot(s) for s in ships]
         elif earlier and earlier.ships:
@@ -221,7 +224,9 @@ def last_position(ctx, args):
     prior = previous_position(ctx, current)
     try:
         names = [resolve_ship(m, q, current) for m in args.ship_mentions]
-        ships = flow.explicit_ships(' '.join(names), current, names) if names else []
+        ships = flow.explicit_ships(q, current)
+        if not ships and names:
+            ships = flow.explicit_ships(' '.join(names), current, names)
     except ValueError as exc:
         return clarification(ctx, 'QUESTION_SCOPE_REQUIRED', str(exc)[:300])
     if not ships:
@@ -235,9 +240,13 @@ def last_position(ctx, args):
     today = utc_today()
     requested = None
     try:
+        if re.search(r'\d{1,2}\s*시|\d{1,2}:\d{2}|오전|오후|정오|자정',q):
+            return clarification(ctx, 'POSITION_TIME_UNAVAILABLE', '현재 위치 자료는 UTC 일별 기록입니다. 정확한 시각의 위치는 확인할 수 없습니다. 조회할 날짜를 하루만 알려 주세요.')
         old_day = str(prior.get('date') or '') if prior else ''
         year, month = (int(old_day[:4]), int(old_day[5:7])) if old_day else (None, None)
         years, periods = intent.date_slots(q, today=intent.local_today(), default_year=year, default_month=month)
+        if not periods and re.search(r'\d+[/.]\d+',q):
+            return clarification(ctx, 'POSITION_DATE_REQUIRED', '조회 날짜를 연도·월·일로 알려 주세요. 예: 2026년 11월 9일')
         if len(periods) > 1 or (periods and periods[0].start != periods[0].end) or (years and not periods):
             return clarification(ctx, 'POSITION_DATE_REQUIRED', '위치를 확인할 날짜를 하루만 알려 주세요. 예: 2026년 11월 9일')
         if periods:

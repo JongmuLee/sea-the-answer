@@ -75,7 +75,7 @@ test('questions carry no answer mode and show the tools the server ran with rela
  const turn=page.locator('[data-answer-id="aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]');
  // Answer first: tools and related documents stay behind the details toggle until opened.
  await expect(turn.getByTestId('tool-calls')).toBeHidden();
- await turn.getByTestId('answer-details').locator('summary').click();
+ await turn.getByTestId('answer-details').locator(':scope > summary').click();
  await expect(turn.getByTestId('tool-calls')).toBeVisible();
  await expect(turn.getByTestId('tool-calls')).toContainText('search_documents');
  await expect(turn.getByTestId('tool-calls')).toContainText('calculate_mrv_reference');

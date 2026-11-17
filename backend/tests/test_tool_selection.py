@@ -436,12 +436,12 @@ def test_paraphrased_period_is_parsed_from_the_original_question(monkeypatch):
     assert answer['routing']['toolCalls'][1]['periodSource'] == 'question'
 
 
-def test_verbatim_period_is_used_as_given(monkeypatch):
+def test_verbatim_period_is_revalidated_from_the_original_question(monkeypatch):
     monkeypatch.setattr(router.tool_dispatch.intent, 'local_today', lambda: __import__('datetime').date(2026, 11, 12))
     answer, _ = ask('해답호 지난달 연료 사용량 합계 알려줘',
         [('summarize_operations', {'ship_mentions': ['해답호'], 'period_text': '지난달'})], monkeypatch)
     assert answer['workflow']['scope']['periods'] == [{'start': '2026-10-01', 'end': '2026-10-31'}]
-    assert 'periodSource' not in answer['routing']['toolCalls'][1]
+    assert answer['routing']['toolCalls'][1]['periodSource'] == 'question'
 
 
 def test_operations_inventory_with_real_date_columns_is_json_serializable(monkeypatch):

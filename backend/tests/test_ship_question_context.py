@@ -196,3 +196,33 @@ def test_repeated_clarification_keeps_the_original_task_and_date(monkeypatch):
     answer=again(store,'해답호.',[('summarize_operations',{'ship_mentions':['해답호']})],
         monkeypatch,second['id'],conversationId=first['id'])
     assert answer['status']=='completed' and store.calls[-1]['from']=='2026-11-09'
+
+
+@pytest.mark.parametrize('phrase',['11/9','2026/11/9','11.9','2026년 11월 9일 오후 3시','2026-11-09T12:00:00Z'])
+def test_unavailable_date_or_clock_precision_is_not_silently_ignored(phrase,monkeypatch):
+    answer,_=ask_position(f'해답호 {phrase} 위치',
+        [('get_last_recorded_position',{'ship_mentions':['해답호']})],monkeypatch,
+        [sim_record('2026-11-09','1, 2')])
+    assert answer['status']=='needs_input' and 'position' not in answer
+
+
+def test_new_explicit_date_overrides_a_model_echo_of_the_previous_period(monkeypatch):
+    first,store=ask('해답호 2026년 11월 9일 연료',
+        [('summarize_operations',{'ship_mentions':['해답호'],'period_text':'2026년 11월 9일'})],monkeypatch)
+    answer=again(store,'그럼 11월 10일은?',
+        [('summarize_operations',{'period_text':'2026년 11월 9일'})],monkeypatch,first['id'])
+    assert answer['status']=='completed' and store.calls[-1]['from']=='2026-11-10'
+
+
+def test_new_explicit_ship_overrides_a_model_echo_of_the_previous_ship(monkeypatch):
+    first,store=ask('해답호 2026년 11월 9일 연료',
+        [('summarize_operations',{'ship_mentions':['해답호'],'period_text':'2026년 11월 9일'})],monkeypatch)
+    answer=again(store,'같은 날짜에 별빛호는?',
+        [('summarize_operations',{'ship_mentions':['해답호']})],monkeypatch,first['id'])
+    assert answer['status']=='completed' and store.calls[-1]['ship']=='b'
+
+
+def test_explicit_ship_is_not_lost_when_the_model_omits_it(monkeypatch):
+    answer,store=ask('해답호 2026년 11월 9일 연료',
+        [('summarize_operations',{'period_text':'2026년 11월 9일'})],monkeypatch)
+    assert answer['status']=='completed' and store.calls[-1]['ship']=='a'

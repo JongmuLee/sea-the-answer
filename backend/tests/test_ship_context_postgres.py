@@ -1,9 +1,11 @@
 """Opt-in authenticated HTTP/PostgreSQL regressions; planner replies are fixtures."""
 from fastapi.testclient import TestClient
 
-from api import config, main, question_router as router, tool_registry as registry
+from api import config, main, question_router as router
 from rag_postgres_support import login
 from test_workflow_skills import database
+
+registry = router.tool_planner.registry
 
 
 def prepare(database, monkeypatch, calls):

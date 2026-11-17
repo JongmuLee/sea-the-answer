@@ -9,7 +9,8 @@ from test_navigation_expansion import expanded_data
 from tools.navigation_references import NavigationCatalog
 
 
-def test_typed_replies_complete_one_conversation_and_requery_current_period(database):
+def test_typed_replies_complete_one_conversation_and_requery_current_period(database,monkeypatch):
+    monkeypatch.setenv('HAEDAP_QUESTION_ROUTER','legacy')
     actor={'id':'fixture','role':'admin'}
     for identifier,name in [('conversation-a','해답호'),('conversation-b','별빛호')]:
         database.change(actor,'ship.save',{'id':identifier,'name':name,'type':'Bulk carrier','dwt':1000,'sample':True})
@@ -45,6 +46,7 @@ def test_typed_replies_complete_one_conversation_and_requery_current_period(data
 
 
 def test_ais_status_wording_in_ai_mode_uses_actual_http_catalog_reader_not_generated_text(database,monkeypatch):
+    monkeypatch.setenv('HAEDAP_QUESTION_ROUTER','legacy')
     catalog=NavigationCatalog.model_validate(expanded_data())
     monkeypatch.setattr(navigation_query.service,'load_snapshot',lambda:(catalog,'a'*64))
     def unrelated_path(*args,**kwargs):
