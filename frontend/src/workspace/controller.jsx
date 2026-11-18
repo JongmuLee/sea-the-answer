@@ -12,6 +12,7 @@ import { documentSavePayload } from '../lib/document-save';
 import { toCsv } from '../lib/csv';
 import { uuid } from '../lib/id';
 import OperationImport from '../components/operation-import';
+import BulkPdfRegistration from '../components/bulk-pdf-registration';
 import {UI_LANGUAGE_KEY} from '../lib/ui-language';
 export function createWorkspace() {
   const model = createModel(),
@@ -852,6 +853,28 @@ export function createWorkspace() {
     uploadError = '';
     openModal(editing ? '문서 개정·정보 수정' : '문서 등록', documentForm(editing));
   }
+  function bulkDocuments() {
+    requireAdmin();
+    const owner = state.user.id;
+    const isOpen = () => !disposed && generation === modalGeneration && state.user?.id === owner && isAdmin();
+    openModal('PDF 일괄 등록', <BulkPdfRegistration
+      isOpen={isOpen}
+      save={payload => {
+        if (!isOpen()) throw Error('등록 창을 다시 열어 주세요.');
+        return api.change('document.save', payload);
+      }}
+      exists={async id => {
+        const result = await api.documents();
+        return result.documents.some(doc => doc.logical_id === id);
+      }}
+      refresh={async () => {
+        if (state.user?.id !== owner) return;
+        const result = await api.documents();
+        if (state.user?.id === owner) { state.docs = result.documents; render(); }
+      }}
+    />);
+    const generation = modalGeneration;
+  }
   async function onPdf(file) {
     if (!file) {
       uploadedPdf = null;
@@ -1407,6 +1430,7 @@ export function createWorkspace() {
       render();
     },
     newDocument: () => editDocument(),
+    bulkDocuments,
     editDocument,
     deleteDocument,
     newShip: () => editShip(),

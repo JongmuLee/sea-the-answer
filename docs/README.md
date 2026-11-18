@@ -1,5 +1,7 @@
 # 해답 문서 안내
 
+- [관리자 PDF 일괄 등록](plans/2026-11-18-bulk-pdf-registration.md)
+
 - [Tool 등록·스키마·실행 코드 통합](plans/2026-11-16-tool-consolidation.md): 구현·검증 완료, [PR #31](https://github.com/dudco/sea-the-answer/pull/31) 제출. 기존 API 계약과 PR #32의 후속 문맥 처리를 유지하며 `backend/tools/`로 공통 정의·실행 코드를 정리했다.
 
 - [질문 표현 다양성과 자료 현황 분기](plans/2026-11-11-question-routing-coverage.md): 구현·검증 완료, [PR #29](https://github.com/dudco/sea-the-answer/pull/29) 제출. 자료 현황·제한된 의미 분류·생성 실패 구분, 운영 배포 제외.
