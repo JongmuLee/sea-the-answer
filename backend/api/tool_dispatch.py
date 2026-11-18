@@ -14,6 +14,9 @@ from pydantic import ValidationError
 from . import dataset_status, navigation_query, question_intent as intent, question_workflows as flow
 from .validation import utc_now
 from .workflow_skills import projected_record as projected
+from api.ship_identity import resolve_ship_name
+from api.ship_context import calendar_defaults, previous_answer, previous_position
+from tools.position_records import select_record, as_of, end_of_day
 
 ACTIONS = {'summarize_operations': 'operations_summary', 'calculate_mrv_reference': 'mrv_reference',
            'calculate_operations_and_mrv': 'combined', 'ask_selected_documents': 'selected_document'}
@@ -66,6 +69,9 @@ def period_source(call, question, summary=None):
     (e.g. "지난달" -> "마지막 달") falls back to parsing the original question.
     """
     text = (getattr(call.args, 'period_text', '') or '').strip()
+    # A new explicit date always overrides dates remembered by the model.
+    if re.search(r'\d{4}-\d{2}-\d{2}|\d+\s*[년월일]|오늘|어제|그제|지난|이번|올해|작년|전날',question):
+        return question, 'question'
     if not text:
         return '', 'none'
     if compact(text) in source_text(question, summary):
@@ -78,6 +84,13 @@ def resolve_ship(mention, question, ships):
 
     Observed 2026-11-12: "가상 선박 해답 2호 · 왕복 시나리오" came back as "가상 선박 해답 2호".
     """
+    try:
+        resolved = resolve_ship_name(mention, ships)
+    except ValueError:
+        # Let the existing executor request disambiguation, rather than choosing a ship.
+        return mention
+    if resolved is not None:
+        return resolved
     value = compact(mention)
     if not value or any(compact(s['name']) == value or compact(s.get('imo')) == value.removeprefix('imo')
                         for s in ships):
@@ -104,6 +117,19 @@ def clarification(ctx, code, notice):
     return save(ctx, {'task': 'clarification', 'status': 'needs_input', 'notice': notice, 'warnings': [code]})
 
 
+def continuation_request(ctx, tool, missing):
+    question = ctx.body['question']
+    prior = previous_answer(ctx)
+    old = prior.get('continuation', {}) if prior else {}
+    if prior and prior.get('status') == 'needs_input' and isinstance(old.get('question'), str):
+        try:
+            if resolve_ship_name(question.strip(' \t\n.!?。'), ctx.db.ships()):
+                question = old['question']
+        except ValueError:
+            pass
+    return {'question': question, 'tool': tool, 'missing': list(missing)}
+
+
 def workflow(ctx, action, args, period=None):
     q = ctx.body['question']
     current = ctx.db.ships()
@@ -111,6 +137,7 @@ def workflow(ctx, action, args, period=None):
     parent = prior[0]['id'] if prior else None
     routing = {'method': 'model_tools', 'model_attempted': True}
     scope = flow.Scope(action=action)
+    earlier = prior[1] if prior and prior[1].action == action else None
     try:
         if action == 'selected_document':
             documents = ctx.db.documents(ctx.user)
@@ -124,17 +151,43 @@ def workflow(ctx, action, args, period=None):
             scope.document_question = q
             return flow.execute(ctx, scope, routing, parent)
         text = (args.period_text if period is None else period).strip()
-        years, periods = intent.date_slots(text, today=intent.local_today()) if text else ([], [])
+        year, month = calendar_defaults(earlier.periods, earlier.years) if earlier else (None, None)
+        if not text and not earlier:
+            previous = previous_answer(ctx)
+            continuation = previous.get('continuation', {}) if previous else {}
+            bare = q.strip(' \t\n.!?。')
+            if (previous and previous.get('task') == 'clarification' and resolve_ship_name(bare, current)
+                    and intent.classify(continuation.get('question', '')) == action):
+                text = continuation['question']
+        years, periods = intent.date_slots(text, today=intent.local_today(), default_year=year,
+                                          default_month=month) if text else ([], [])
+        # Remove explicitly excluded single dates; never silently include an excluded day.
+        excluded = []
+        for match in re.finditer(r'((?:\d{4}년\s*)?(?:\d{1,2}월\s*)?\d{1,2}일)[은는을를\s]*(?:제외|빼고|말고)', q):
+            _, days = intent.date_slots(match[1], default_year=year, default_month=month)
+            excluded.extend(p.start for p in days)
+        if excluded:
+            if any(p.start != p.end and any(p.start <= d <= p.end for d in excluded) for p in periods):
+                raise ValueError('제외 날짜를 뺀 조회 날짜 범위를 최대 두 개로 알려 주세요.')
+            periods = [p for p in periods if p.start not in excluded]
+            if not periods:
+                raise ValueError('제외 후 조회할 날짜가 없습니다. 조회할 날짜를 다시 알려 주세요.')
         if years:
             scope.years = years
         if periods:
             scope.periods = periods
         elif years and action in ('operations_summary', 'combined'):
             scope.periods = [intent.Period(start=f'{y}-01-01', end=f'{y}-12-31') for y in years]
+        if not text and earlier:
+            scope.years, scope.periods = earlier.years, earlier.periods
         names = [resolve_ship(m, q, current) for m in args.ship_mentions]
-        ships = flow.explicit_ships(' '.join(names), current, names) if names else []
+        ships = flow.explicit_ships(q, current)
+        if not ships and names:
+            ships = flow.explicit_ships(' '.join(names), current, names)
         if ships:
             scope.ships = [flow.snapshot(s) for s in ships]
+        elif earlier and earlier.ships:
+            scope.ships = earlier.ships
         else:
             selected = (ctx.body.get('context') or {}).get('ship')
             scope.ships = [flow.snapshot(s) for s in current if s['id'] == selected]
@@ -145,19 +198,20 @@ def workflow(ctx, action, args, period=None):
             prompted = bool(earlier and prior[0]['workflow'].get('missing', [None])[:1] == ['reference_ack'])
             # Consent comes from the user's reply to an explicit prompt, or a consent already given in this thread.
             scope.reference_ack = bool(args.accept_reference and prompted) or bool(earlier and earlier.reference_ack)
-        return flow.execute(ctx, scope, routing, parent)
+        result = flow.execute(ctx, scope, routing, parent)
+        if result.get('status') == 'needs_input':
+            result['continuation'] = continuation_request(ctx, '',
+                                                        result.get('workflow', {}).get('missing', []))
+        return result
     except (ValueError, ValidationError) as exc:
         try:
             scope = flow.Scope.model_validate(scope.model_dump())
         except (ValueError, ValidationError):
             scope = flow.Scope(action=action)
         notice = str(exc)[:300] if not isinstance(exc, ValidationError) else '선박·기간·연도 입력 형식을 확인해 주세요.'
+        if any(word in notice for word in ('day is out of range', 'month must be', 'year ')):
+            notice = '존재하지 않는 날짜입니다. 연도·월·일을 확인해 주세요.'
         return flow.save(ctx, scope, 'needs_input', notice, flow.missing_fields(scope), routing, parent=parent)
-
-
-def end_of_day(record):
-    """Simulated records hold the position at 24:00 UTC of their date."""
-    return 'UTC 일자' in str(record.get('note') or '')
 
 
 def utc_today():
@@ -167,36 +221,58 @@ def utc_today():
 def last_position(ctx, args):
     q = ctx.body['question']
     current = ctx.db.ships()
-    names = [resolve_ship(m, q, current) for m in args.ship_mentions]
+    prior = previous_position(ctx, current)
     try:
-        ships = flow.explicit_ships(' '.join(names), current, names) if names else []
+        names = [resolve_ship(m, q, current) for m in args.ship_mentions]
+        ships = flow.explicit_ships(q, current)
+        if not ships and names:
+            ships = flow.explicit_ships(' '.join(names), current, names)
     except ValueError as exc:
         return clarification(ctx, 'QUESTION_SCOPE_REQUIRED', str(exc)[:300])
     if not ships:
         selected = (ctx.body.get('context') or {}).get('ship')
+        if not selected and prior:
+            selected = prior['ship']['id']
         ships = [s for s in current if s['id'] == selected]
     if len(ships) != 1:
         return clarification(ctx, 'QUESTION_SCOPE_REQUIRED', '위치를 확인할 선박 이름을 한 척만 알려 주세요.')
     ship = ships[0]
     today = utc_today()
-    # A 24:00 UTC snapshot dated today describes a moment that has not happened yet.
-    record = next((r for r in ctx.db.recent_positions(ship['id'], today)
-                   if not (end_of_day(r) and str(r['date']) >= today)), None)
+    requested = None
+    try:
+        if re.search(r'\d{1,2}\s*시|\d{1,2}:\d{2}|오전|오후|정오|자정',q):
+            return clarification(ctx, 'POSITION_TIME_UNAVAILABLE', '현재 위치 자료는 UTC 일별 기록입니다. 정확한 시각의 위치는 확인할 수 없습니다. 조회할 날짜를 하루만 알려 주세요.')
+        old_day = str(prior.get('date') or '') if prior else ''
+        year, month = (int(old_day[:4]), int(old_day[5:7])) if old_day else (None, None)
+        years, periods = intent.date_slots(q, today=intent.local_today(), default_year=year, default_month=month)
+        if not periods and re.search(r'\d+[/.]\d+',q):
+            return clarification(ctx, 'POSITION_DATE_REQUIRED', '조회 날짜를 연도·월·일로 알려 주세요. 예: 2026년 11월 9일')
+        if len(periods) > 1 or (periods and periods[0].start != periods[0].end) or (years and not periods):
+            return clarification(ctx, 'POSITION_DATE_REQUIRED', '위치를 확인할 날짜를 하루만 알려 주세요. 예: 2026년 11월 9일')
+        if periods:
+            requested = periods[0].start
+        elif prior and prior['ship']['id'] == ship['id'] and re.search(r'방금|그\s*위치|기록된|기록\s*시각|실제\s*관측|시뮬레이션',q):
+            requested = old_day
+    except (ValueError, ValidationError):
+        return clarification(ctx, 'POSITION_DATE_REQUIRED', '조회할 날짜의 연도·월·일을 확인해 주세요.')
+    through = min(requested, today) if requested else today
+    record = select_record(ctx.db.recent_positions(ship['id'], through), today=today, requested=requested)
     if record is None:
         return save(ctx, {'task': 'position', 'status': 'insufficient_evidence',
-                          'notice': f"{ship['name']}의 운항기록에 저장된 위치가 없습니다."})
+                          'notice': f"{ship['name']}의 " + (f'{requested} 날짜에 확인 가능한 위치 기록이 없습니다. 다른 날짜의 위치로 대신 답하지 않습니다.' if requested else '운항기록에 저장된 위치가 없습니다.')})
     day = str(record['date'])
-    at = (date.fromisoformat(day) + timedelta(days=1)).isoformat() + 'T00:00:00Z' if end_of_day(record) else None
+    at = as_of(record)
     expected = projected(record)
     sample = bool(ship.get('sample') or record.get('sample'))
     basis = f'{day} 24:00 UTC 기록' if at else f'{day} 운항기록'
-    notice = (('[예상 기록] ' if expected else '') + f"{ship['name']}의 마지막 기록 위치는 {record['position']}입니다. "
+    label = f'{requested} 기록 위치' if requested else '마지막 기록 위치'
+    notice = (('[예상 기록] ' if expected else '') + f"{ship['name']}의 {label}는 {record['position']}입니다. "
               f"{basis} 기준이며 실시간 추적이 아닙니다." + (' 시뮬레이션 예상값입니다.' if expected else ''))
     warnings = (['PROJECTED_OPERATIONS'] if expected else []) + (['SYNTHETIC_OR_SAMPLE_OPERATIONS'] if sample else [])
-    position = {'ship': {k: ship.get(k, '') for k in ('id', 'name', 'imo', 'sample')}, 'recordId': record['id'],
+    position = {'ship': {k: ship.get(k, '') for k in ('id', 'name', 'imo', 'sample', 'version')}, 'recordId': record['id'],
                 'version': record.get('version'), 'date': day, 'asOf': at, 'position': record['position'],
                 'note': str(record.get('note') or ''), 'voyage': str(record.get('voyage') or ''),
-                'projected': expected, 'sample': sample}
+                'projected': expected, 'sample': sample, 'selection': 'date' if requested else 'latest'}
     return save(ctx, {'task': 'position', 'notice': notice, 'warnings': warnings, 'position': position})
 
 
@@ -236,7 +312,9 @@ def run(ctx, call, period=None):
         return save(ctx, {'toolRuns': [result], 'notice': '질문에 주어진 UTC 시각과 시차로 계산했습니다.'})
     if name == 'request_clarification':
         labels = '·'.join(CLARIFY[m] for m in args.missing)
-        return clarification(ctx, 'QUESTION_SCOPE_REQUIRED', f'질문을 처리하려면 {labels}을(를) 알려 주세요.')
+        return save(ctx, {'task':'clarification','status':'needs_input','warnings':['QUESTION_SCOPE_REQUIRED'],
+            'notice':f'질문을 처리하려면 {labels}을(를) 알려 주세요.',
+            'continuation':continuation_request(ctx,name,args.missing)})
     if name == 'decline_request':
         return save(ctx, {'task': 'unsupported', 'status': 'unsupported', 'notice': DECLINE[args.reason],
                           'warnings': ['UNSUPPORTED_REQUEST']})
