@@ -1,6 +1,6 @@
 # plans — 작업 계획
 
-- [Tool 등록·스키마·실행 코드 통합](2026-11-16-tool-consolidation.md): 완료(Draft PR 제출 대상) · 손태호 · API 호환·공통 Tool 패키지·회귀 검증.
+- [Tool 등록·스키마·실행 코드 통합](2026-11-16-tool-consolidation.md): 완료([PR #31](https://github.com/dudco/sea-the-answer/pull/31) 제출) · 손태호 · API 호환·공통 Tool 패키지·PR #32 후속 문맥 호환·회귀 검증.
 
 - [2026-11-11 질문 표현·자료 현황·Qwen 생성 실패 보완](2026-11-11-question-routing-coverage.md) — 완료. 최신 main 통합·CI 검증·[PR #29](https://github.com/dudco/sea-the-answer/pull/29) 제출, 운영 배포 제외.
 - [2026-11-05 문서별 벡터 준비 상태](2026-11-05-vector-readiness.md): 완료.

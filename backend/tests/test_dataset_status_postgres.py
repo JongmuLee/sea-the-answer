@@ -52,6 +52,7 @@ def test_nonapproved_identifiers_and_filters_never_reach_sql(inventory,dataset,v
 
 
 def test_inventory_http_uses_registered_sql_and_distinguishes_missing_conditions(database,inventory,monkeypatch):
+    monkeypatch.setenv('HAEDAP_QUESTION_ROUTER','legacy')
     engine,_=inventory
     monkeypatch.setattr(dataset_status,'create_engine_for',lambda _:engine)
     monkeypatch.setattr(dataset_status.config,'database_url',lambda:'postgresql://fixture.invalid')

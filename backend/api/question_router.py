@@ -147,6 +147,8 @@ def router_mode():
 
 def previous_summary(ctx):
     """Owner-checked, compact description of the previous answer for the tool planner."""
+    from .ship_context import starts_new_scope
+    if starts_new_scope(ctx.body.get('question')):return None
     context=ctx.body.get('context') or {};parent=context.get('previousQueryId')
     try:
         if not isinstance(parent,str) or str(UUID(parent))!=parent.lower():return None
@@ -157,6 +159,13 @@ def previous_summary(ctx):
     if not isinstance(prior,dict):return None
     conversation=ctx.body.get('conversationId')
     if conversation and prior.get('conversationId',prior.get('id'))!=conversation:return None
+    sources=[*prior.get('evidence',[]),*prior.get('relatedEvidence',[])]
+    if any(not ctx.db.can_read_document(ctx.user,item['document_id']) for item in sources
+           if isinstance(item,dict) and item.get('document_id')):return None
+    if isinstance(prior.get('workflow'),dict) and question_workflows.previous(ctx,ctx.db.ships()) is None:return None
+    if isinstance(prior.get('position'),dict):
+        from .ship_context import previous_position
+        if previous_position(ctx,ctx.db.ships()) is None:return None
     summary={'task':prior.get('task'),'question':str(prior.get('question',''))[:300]}
     flow=prior.get('workflow')
     if isinstance(flow,dict) and isinstance(flow.get('scope'),dict):
@@ -172,6 +181,7 @@ def previous_summary(ctx):
         summary['datasets']=[d.get('dataset') for d in status.get('datasets',[]) if isinstance(d,dict)]
     tools=(prior.get('routing') or {}).get('toolCalls') if isinstance(prior.get('routing'),dict) else None
     if isinstance(tools,list):summary['tools']=[t.get('name') for t in tools if isinstance(t,dict)]
+    summary.update(tool_planner.previous_context(prior))
     return summary
 
 

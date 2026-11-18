@@ -437,12 +437,12 @@ def test_paraphrased_period_is_parsed_from_the_original_question(monkeypatch):
     assert answer['routing']['toolCalls'][1]['periodSource'] == 'question'
 
 
-def test_verbatim_period_is_used_as_given(monkeypatch):
+def test_verbatim_period_is_revalidated_from_the_original_question(monkeypatch):
     monkeypatch.setattr(router.tool_dispatch.intent, 'local_today', lambda: __import__('datetime').date(2026, 11, 12))
     answer, _ = ask('해답호 지난달 연료 사용량 합계 알려줘',
         [('summarize_operations', {'ship_mentions': ['해답호'], 'period_text': '지난달'})], monkeypatch)
     assert answer['workflow']['scope']['periods'] == [{'start': '2026-10-01', 'end': '2026-10-31'}]
-    assert 'periodSource' not in answer['routing']['toolCalls'][1]
+    assert answer['routing']['toolCalls'][1]['periodSource'] == 'question'
 
 
 def test_operations_inventory_with_real_date_columns_is_json_serializable(monkeypatch):
@@ -472,8 +472,8 @@ def test_shortened_ship_name_is_completed_only_from_the_question():
     ships = [{'id': 'x', 'name': '가상 선박 해답 2호 · 왕복 시나리오'}, {'id': 'y', 'name': '가상 선박 해답호'}]
     q = '가상 선박 해답 2호 · 왕복 시나리오의 2026년 10월 연료 사용량 합계 알려줘'
     assert tool_dispatch.resolve_ship('가상 선박 해답 2호', q, ships) == '가상 선박 해답 2호 · 왕복 시나리오'
-    # The full name must be in the question: a fragment alone is never expanded.
-    assert tool_dispatch.resolve_ship('가상 선박 해답 2호', '가상 선박 해답 2호 연료', ships) == '가상 선박 해답 2호'
+    # Only explicitly defined, unique display-name aliases may now be expanded.
+    assert tool_dispatch.resolve_ship('가상 선박 해답 2호', '가상 선박 해답 2호 연료', ships) == '가상 선박 해답 2호 · 왕복 시나리오'
     # Ambiguous fragments stay as they are and lead to a clarification.
     both = q + ' 그리고 가상 선박 해답호'
     assert tool_dispatch.resolve_ship('가상 선박', both, ships) == '가상 선박'

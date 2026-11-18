@@ -503,8 +503,11 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     let busyResponses = 0;
     for (;;) {
       await expect(page.locator('#restoreForm button[type=submit]')).toBeEnabled();
+      // The API client allows 32s for restore; observe its bounded result before
+      // the test gives up. BUSY backoff above remains limited to 15s.
       const restoreResponse = page.waitForResponse(response =>
-        new URL(response.url()).pathname === '/api/backups/restore' && response.request().method() === 'POST');
+        new URL(response.url()).pathname === '/api/backups/restore' && response.request().method() === 'POST',
+        { timeout: 35_000 });
       await submit('#restoreForm');
       const restored = await restoreResponse;
       const restoreResult = await restored.json();

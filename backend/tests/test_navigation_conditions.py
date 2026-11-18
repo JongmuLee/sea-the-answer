@@ -206,7 +206,8 @@ def test_filtering_unknowns_and_sorting_never_mutate_source_results():
     assert selected[0]['berths'] == [] and counts['excluded_unknown_count'] == 1 and rows == before
 
 
-def test_actual_postgres_followup_requires_the_parent_owner(database, setup):
+def test_actual_postgres_followup_requires_the_parent_owner(database, setup, monkeypatch):
+    monkeypatch.setenv('HAEDAP_QUESTION_ROUTER','legacy')
     ctx, loader, calculator = setup
     actor = database.one("SELECT * FROM users WHERE username='admin'")
     database.change(actor, 'ship.save', {'id':'ship-1', 'name':'검증 선박', 'imo':IMO,
