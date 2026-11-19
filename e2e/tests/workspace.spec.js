@@ -1,29 +1,7 @@
 // Full workspace flow in one browser session (ported from scripts/next-browser-smoke.mjs).
 // Steps share state (login, sample data, created records), so they run in order inside one test.
 import { test, expect } from '@playwright/test';
-
-// A real one-page PDF exercises the local PDF.js worker and persisted source bytes.
-function onePagePdf(text) {
-  const content = `BT /F1 12 Tf 50 750 Td (${text}) Tj ET`;
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
-  ];
-  let pdf = '%PDF-1.4\n';
-  const offsets = [];
-  objects.forEach((o, i) => {
-    offsets.push(Buffer.byteLength(pdf));
-    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
-  });
-  const xref = Buffer.byteLength(pdf);
-  pdf += `xref\n0 6\n0000000000 65535 f \n${offsets
-    .map((x) => String(x).padStart(10, '0') + ' 00000 n ')
-    .join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return pdf;
-}
+import { pdfFixture } from '../pdf-fixture.js';
 
 test.beforeAll(async ({ request }) => {
   // The stack may still be starting (local runs); compose waits on health checks already.
@@ -160,6 +138,7 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
   await test.step('Document routing, direct refresh, crew controls', async () => {
     await go('docs');
     await expect(action('newDocument')).toHaveCount(0);
+    await expect(action('bulkDocuments')).toHaveCount(0);
     await action('document').first().click();
     await page.waitForURL('**/documents/*');
     await expect(action('editDocument')).toHaveCount(0);
@@ -334,7 +313,7 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
 
   await test.step('PDF.js extraction, page provenance, persisted PDF retrieval', async () => {
     const pdfText = 'Next.js migration PDF evidence.';
-    const pdf = onePagePdf(pdfText);
+    const pdf = pdfFixture(pdfText);
     await go('docs');
     await action('newDocument').click();
     await page
@@ -354,6 +333,28 @@ test('workspace: documents, operations, reports, admin review, backup', async ({
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']).toMatch(/application\/pdf/);
     expect((await response.body()).toString()).toBe(pdf);
+  });
+
+  await test.step('Bulk PDF files appear independently and become searchable after indexing', async () => {
+    await go('docs');
+    await action('bulkDocuments').click();
+    const dialog = page.getByRole('dialog');
+    const terms = ['bulkportfixture', 'bulkshipfixture'];
+    await dialog.locator('input[type=file]').setInputFiles(terms.map(term => ({
+      name: term + '.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdfFixture('Synthetic ' + term)),
+    })));
+    await dialog.getByLabel(/선택한 파일의 본문/).check();
+    await dialog.getByRole('button', { name: /선택 파일 저장/ }).click();
+    await expect(dialog.getByRole('status').filter({ hasText: '저장 완료' })).toHaveCount(2);
+    await expect(dialog.locator('input[type=file]')).toBeEnabled();
+    await close();
+    for (const term of terms) {
+      await expect(page.locator('.docrow').filter({ hasText: term })).toHaveCount(1);
+      await expect.poll(async () => {
+        const { data } = await api('/api/search', { question: term });
+        return data.evidence?.some(hit => hit.title === term && hit.page === 1);
+      }, { timeout: 60000 }).toBe(true);
+    }
   });
 
   await test.step('Ship and record registration, record deletion', async () => {

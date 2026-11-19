@@ -1,12 +1,14 @@
 // PDF.js is bundled locally: uploaded document bytes never leave this server/browser.
-export async function extractPdf(file, progress = () => {}) {
-  if (!file || file.size > 25 * 1024 * 1024) throw Error('25MB 이하의 PDF를 선택해 주세요.');
+export const PDF_BYTE_LIMIT = 25 * 1024 * 1024;
+
+export async function extractPdf(file, progress = () => {}, { includeFile = true } = {}) {
+  if (!file || file.size > PDF_BYTE_LIMIT) throw Error('25MB 이하의 PDF를 선택해 주세요.');
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdfjs = await import(/* webpackIgnore: true */ '/vendor/pdfjs/pdf.mjs');
   const base = new URL('/vendor/pdfjs/', window.location.origin).href;
   pdfjs.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.mjs';
   const task = pdfjs.getDocument({
-    data: bytes.slice(),
+    data: includeFile ? bytes.slice() : bytes,
     cMapUrl: base + 'cmaps/',
     cMapPacked: true,
     standardFontDataUrl: base + 'standard_fonts/',
@@ -43,6 +45,7 @@ export async function extractPdf(file, progress = () => {}) {
       throw Error(
         '추출할 텍스트가 없습니다. 스캔 PDF는 OCR 처리 후 등록하거나 페이지별 본문을 입력해 주세요.',
       );
+    if (!includeFile) return { sections, emptyPages };
     let binary = '';
     for (let i = 0; i < bytes.length; i += 32768)
       binary += String.fromCharCode(...bytes.subarray(i, i + 32768));

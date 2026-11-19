@@ -382,6 +382,7 @@ export function createMainViews(model, views) {
           '문서를 등록하고 버전과 적용 조건을 확인하세요.',
           <>
             {btn('새로고침', 'refreshDocuments', '', 'refresh')}
+            {isAdmin() && btn('문서 일괄 등록', 'bulkDocuments', 'primary', 'plus')}
             <UiText>{isAdmin() ? btn('문서 등록', 'newDocument', 'primary', 'plus') : ''}</UiText>
           </>,
         )}
