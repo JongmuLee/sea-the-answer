@@ -23,7 +23,7 @@ class Client:
 
 
 def test_checked_in_cases_load_and_reference_registered_tools():
-    from api import tool_registry
+    from tools import registry as tool_registry
     for name in ('tool-selection-eval.json', 'tool-selection-holdout.json'):
         cases = evaluation.load_cases(evaluation.DEFAULT_CASES.with_name(name))
         assert len(cases) >= 20

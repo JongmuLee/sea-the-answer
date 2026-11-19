@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 import httpx
 import pytest
 
-from api import main, workflow_skills as skills
+from api import main
+from tools import workflows as skills
 from api.errors import ApiError
 from rag_postgres_support import configure_api, isolated_workspace, login
 

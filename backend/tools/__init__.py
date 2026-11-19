@@ -1,1 +1,1 @@
-"""Server-side tools shared by the backend API."""
+"""Runtime Tool definitions, workflows and maritime query/calculation code."""

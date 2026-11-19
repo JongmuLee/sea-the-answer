@@ -5,77 +5,20 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from functools import lru_cache
-from typing import Literal
 from uuid import uuid4
 import re
 import os
 
 import httpx
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 from psycopg.types.json import Jsonb
 
-from . import config, llm
-from .errors import ApiError, require
-from .validation import utc_now
-
-DEFINITIONS = {
-    "mrv-analysis": (
-        "MRV 참고 탄소집약도 분석",
-        "선택 선박의 MRV와 공개 DWT 후보로 참고값을 계산합니다.",
-    ),
-    "selected-document-answer": (
-        "선택 문서 기반 답변",
-        "선택한 문서 안에서만 질문의 근거를 찾습니다.",
-    ),
-    "operation-summary": (
-        "운항 실적 요약",
-        "앱 일별 운항기록의 연료·배출량·거리를 요약합니다.",
-    ),
-    "report-draft": (
-        "보고서 초안 작성",
-        "운항자료와 선택 문서로 검토용 초안을 만듭니다. 저장은 별도입니다.",
-    ),
-    "checklist": (
-        "점검 체크리스트 생성",
-        "선택 문서의 근거로 확인 항목 초안을 만듭니다.",
-    ),
-    "qa-evaluation": (
-        "질의·응답 평가",
-        "내 저장 응답의 인용·범위·참고값 계약을 검사합니다.",
-    ),
-}
-SkillID = Literal[
-    "mrv-analysis",
-    "selected-document-answer",
-    "operation-summary",
-    "report-draft",
-    "checklist",
-    "qa-evaluation",
-]
-VERSION = "HAEDAP-SKILLS-1.0"
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class Context(Strict):
-    ship: str = Field(default="", max_length=100)
-    # Keep JSON date input explicit and validate only for workflows using it.
-    start: str = Field(default="", alias="from", max_length=10)
-    end: str = Field(default="", alias="to", max_length=10)
-
-
-class SkillRequest(Strict):
-    skill: SkillID
-    question: str = Field(min_length=1, max_length=2000)
-    document_ids: list[str] = Field(default_factory=list, max_length=20)
-    context: Context = Field(default_factory=Context)
-    year: int | None = Field(default=None, ge=1900, le=2100)
-    use_model: bool = False
-    answer_id: str = Field(default="", max_length=100)
-    template: Literal["noon", "mrv"] = "mrv"
+from api import config, llm
+from api.errors import ApiError, require
+from api.validation import utc_now
+from .schemas import Context, SkillRequest
+from .registry import WORKFLOW_DEFINITIONS as DEFINITIONS, WORKFLOW_VERSION as VERSION, workflow_catalog as catalog
 
 
 @lru_cache(maxsize=6)
@@ -92,23 +35,6 @@ def instructions(skill):
         503,
     )
     return content.split("---", 2)[2].strip()
-
-
-def catalog():
-    return {
-        "version": VERSION,
-        "skills": [
-            {
-                "id": k,
-                "name": v[0],
-                "description": v[1],
-                "optional_model": k
-                in {"selected-document-answer", "checklist", "report-draft"},
-                "version": VERSION,
-            }
-            for k, v in DEFINITIONS.items()
-        ],
-    }
 
 
 def decimal_text(number):
@@ -481,7 +407,7 @@ def run(db, user, payload):
                 calculate_reference,
             )
             from sqlalchemy.exc import SQLAlchemyError
-            from .maritime_context import resolve_real_ship
+            from api.maritime_context import resolve_real_ship
 
             engine = None
             try:

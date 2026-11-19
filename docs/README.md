@@ -1,5 +1,7 @@
 # 해답 문서 안내
 
+- [Tool 등록·스키마·실행 코드 통합](plans/2026-11-16-tool-consolidation.md): 구현·검증 완료, [PR #31](https://github.com/dudco/sea-the-answer/pull/31) 제출. 기존 API 계약과 PR #32의 후속 문맥 처리를 유지하며 `backend/tools/`로 공통 정의·실행 코드를 정리했다.
+
 - [질문 표현 다양성과 자료 현황 분기](plans/2026-11-11-question-routing-coverage.md): 구현·검증 완료, [PR #29](https://github.com/dudco/sea-the-answer/pull/29) 제출. 자료 현황·제한된 의미 분류·생성 실패 구분, 운영 배포 제외.
 
 - [실제 로컬 LLM 연결·최종 답변 검증](plans/2026-11-10-local-llm-answer-validation.md): 완료. 실제 연결과 제한된 생성 확인, 전반적 생성 품질 미달.
